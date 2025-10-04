@@ -1,0 +1,390 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Doctor Portal - RapidCare</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="/js/client.js"></script>
+  <script src="/js/navigation.js"></script>
+  <style>
+    body { font-family: system-ui, Arial; margin: 20px; }
+    label { display:block; margin-top:6px; }
+    input, select { width: 100%; padding:6px; }
+    .row { display:flex; gap:16px; flex-wrap:wrap; }
+    .col { flex:1 1 380px; border:1px solid #ddd; border-radius:10px; padding:12px; }
+    button { padding:8px 12px; margin-top: 8px; }
+    
+    /* Dashboard Styles */
+    .dashboard-stats { margin-top: 20px; }
+    .stat-card { 
+      background: #f8f9fa; 
+      border: 1px solid #dee2e6; 
+      border-radius: 8px; 
+      padding: 16px; 
+    }
+    .stat-item { 
+      margin-bottom: 8px; 
+      padding: 8px; 
+      background: white; 
+      border-radius: 4px; 
+      border-left: 4px solid #28a745; 
+    }
+  </style>
+</head>
+<body>
+  <h2>Doctor Portal</h2>
+  
+  <div id="login-section" style="display: block;">
+    <h3>Doctor Login</h3>
+    <label>Doctor ID</label>
+    <input id="doc-login-user" type="text" placeholder="Enter Doctor ID" />
+    <label>Password</label>
+    <input id="doc-login-pass" type="password" placeholder="Enter password" />
+    <button onclick="loginDoctorHere()">Login</button>
+    <div id="login-msg" style="margin-top:10px;"></div>
+    <p class="muted" style="margin-top:10px;">Or <a href="/">login from main page</a></p>
+  </div>
+
+  <div id="doctor-dashboard" style="display: none;">
+    <div id="navigation-container"></div>
+  </div>
+
+  <!-- Dashboard Section -->
+  <div id="section-dashboard" class="portal-section" style="display: none;">
+    <div class="col">
+      <h3>👨‍⚕️ Doctor Dashboard</h3>
+      <div id="doctor-info" style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
+        <strong>Doctor:</strong> <span id="doc-info"></span>
+      </div>
+      <p>Welcome to the Doctor Portal. Use the navigation above to manage your profile and attendance.</p>
+      <div class="dashboard-stats">
+        <div class="stat-card">
+          <h4>Quick Stats</h4>
+          <div id="doctor-quick-stats">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile Section -->
+  <div id="section-profile" class="portal-section" style="display: none;">
+    <div class="col">
+      <h3>Profile Management</h3>
+      <div id="doctor-info-profile" style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
+        <strong>Doctor:</strong> <span id="doc-info-profile"></span>
+      </div>
+      <label>Name</label><input id="name" />
+      <label>Qualification</label><input id="qualification" />
+      <label>Speciality</label><input id="speciality" />
+      <label>Experience</label><input id="experience" />
+      <button onclick="saveProfile()">Update Profile</button>
+      <div style="margin-top:20px; padding:10px; background:#f8f9fa; border-radius:5px;">
+        <h4>Change Password</h4>
+        <label>New Password</label><input id="new-password" type="password" />
+        <button onclick="changePasswordDoctor()">Change Password</button>
+        <div id="change-pass-msg" style="margin-top:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attendance Section -->
+  <div id="section-attendance" class="portal-section" style="display: none;">
+    <div class="col">
+      <h3>Attendance System</h3>
+      <div style="margin-bottom:8px;">
+        <button onclick="fetchQr()">Show Present/Absent QR</button>
+        <div id="qr-links" class="muted" style="margin-top:6px;"></div>
+      </div>
+      <div style="background: #e9ecef; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+        <strong>Instructions:</strong><br>
+        1. Click "Show Present/Absent QR" to get QR codes<br>
+        2. Scan the appropriate QR code to mark attendance<br>
+        3. Select your shift when prompted<br>
+        4. Attendance will be automatically recorded
+      </div>
+      <h4>Mark Attendance Manually</h4>
+      <label>Date</label><input id="date" type="date" />
+      <label>Status</label>
+      <select id="availability">
+        <option>Present</option>
+        <option>Absent</option>
+      </select>
+      <label>Shift</label>
+      <select id="shift">
+        <option>Morning</option>
+        <option>Afternoon</option>
+        <option>Evening</option>
+        <option>Night</option>
+      </select>
+      <button onclick="markAttendance()">Mark Attendance</button>
+      <div id="attendance-msg" style="margin-top:10px;"></div>
+      
+      <h4 style="margin-top:20px;">My Attendance History</h4>
+      <div id="attendance-history" style="margin-top:10px; max-height:300px; overflow-y:auto;">
+        <p class="muted">Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentDoctor = null;
+    let currentHospitalId = null;
+
+    // Show login section on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      try{
+        const role = localStorage.getItem('role');
+        const stored = JSON.parse(localStorage.getItem('doctor')||'null');
+        console.log('Doctor Portal - Role:', role, 'Stored:', stored);
+        if(role==='doctor' && stored && Object.keys(stored).length > 0){
+          currentDoctor = stored;
+          currentHospitalId = stored.hospitalId;
+          document.getElementById('doctor-dashboard').style.display = 'block';
+          document.getElementById('login-section').style.display = 'none';
+          document.getElementById('doc-info').innerText = `${stored.name || stored.doctorId} - ${stored.speciality || 'General'}`;
+          document.getElementById('doc-info-profile').innerText = `${stored.name || stored.doctorId} - ${stored.speciality || 'General'}`;
+          initializeNavigation();
+          loadDoctorProfile();
+          loadAttendance();
+          // Check if password change is required
+          if(stored.forcePasswordChange){
+            alert('You must change your password before continuing.');
+            showSection('profile');
+          } else {
+            showSection('dashboard');
+          }
+          return;
+        }
+      }catch(e){
+        console.error('Doctor portal error:', e);
+      }
+      document.getElementById('login-section').style.display = 'block';
+      document.getElementById('doctor-dashboard').style.display = 'none';
+    });
+
+    async function changePasswordDoctor(){
+      if(!currentDoctor) return alert('Please login first');
+      const newPass = document.getElementById('new-password').value;
+      if(!newPass || newPass.length < 6){
+        document.getElementById('change-pass-msg').innerText = 'Password must be at least 6 characters.';
+        return;
+      }
+      try{
+        await changePassword('doctor', currentDoctor.doctorId, newPass);
+        document.getElementById('change-pass-msg').innerText = 'Password changed successfully!';
+        document.getElementById('new-password').value = '';
+        // Update forcePasswordChange flag
+        currentDoctor.forcePasswordChange = false;
+        localStorage.setItem('doctor', JSON.stringify(currentDoctor));
+        alert('Password changed! You can now access all features.');
+        showSection('dashboard');
+      }catch(e){ 
+        document.getElementById('change-pass-msg').innerText = 'Error: ' + e.message; 
+      }
+    }
+
+    async function loginDoctorHere(){
+      const username = document.getElementById('doc-login-user').value.trim();
+      const password = document.getElementById('doc-login-pass').value;
+      if(!username || !password){
+        document.getElementById('login-msg').innerText = 'Please enter username and password';
+        document.getElementById('login-msg').style.color = 'red';
+        return;
+      }
+      try{
+        const res = await login('doctor', username, password);
+        localStorage.setItem('role','doctor');
+        localStorage.setItem('doctor', JSON.stringify(res.doctor||{}));
+        document.getElementById('login-msg').innerText = 'Login successful! Loading dashboard...';
+        document.getElementById('login-msg').style.color = 'green';
+        setTimeout(() => location.reload(), 500);
+      }catch(e){
+        document.getElementById('login-msg').innerText = 'Login failed: ' + e.message;
+        document.getElementById('login-msg').style.color = 'red';
+      }
+    }
+
+    async function loadDoctorProfile(){
+      if(!currentDoctor) return;
+      document.getElementById('name').value = currentDoctor.name || '';
+      document.getElementById('qualification').value = currentDoctor.qualification || '';
+      document.getElementById('speciality').value = currentDoctor.speciality || '';
+      document.getElementById('experience').value = currentDoctor.experience || '';
+    }
+
+    async function saveProfile(){
+      if(!currentDoctor) return alert('Please login first');
+      const body = {
+        name: document.getElementById('name').value,
+        qualification: document.getElementById('qualification').value,
+        speciality: document.getElementById('speciality').value,
+        experience: document.getElementById('experience').value
+      };
+      try{
+        await api(`/api/doctors/${currentDoctor.doctorId}`, { method:'PUT', body: JSON.stringify(body) });
+        alert('Profile updated successfully!');
+        // Reload doctor data
+        const updatedDoctor = await api(`/api/doctors/doctor/${currentDoctor.doctorId}`);
+        currentDoctor = updatedDoctor;
+        localStorage.setItem('doctor', JSON.stringify(updatedDoctor));
+        document.getElementById('doc-info').innerText = `${updatedDoctor.name || updatedDoctor.doctorId} - ${updatedDoctor.speciality || 'General'}`;
+        document.getElementById('doc-info-profile').innerText = `${updatedDoctor.name || updatedDoctor.doctorId} - ${updatedDoctor.speciality || 'General'}`;
+      }catch(e){
+        alert('Error updating profile: ' + e.message);
+      }
+    }
+
+    async function markAttendance(){
+      if(!currentDoctor) return alert('Please login first');
+      const dateValue = document.getElementById('date').value;
+      if(!dateValue){
+        document.getElementById('attendance-msg').innerText = '❌ Please select a date';
+        document.getElementById('attendance-msg').style.color = 'red';
+        return;
+      }
+      const body = {
+        doctorId: currentDoctor.doctorId,
+        date: dateValue,
+        availability: document.getElementById('availability').value,
+        shift: document.getElementById('shift').value,
+        markedBy: 'Doctor'
+      };
+      try{
+        await api('/api/doctors/attendance', { method:'POST', body: JSON.stringify(body) });
+        document.getElementById('attendance-msg').innerText = '✅ Attendance marked successfully!';
+        document.getElementById('attendance-msg').style.color = 'green';
+        document.getElementById('date').value = '';
+        loadAttendance();
+      }catch(e){
+        document.getElementById('attendance-msg').innerText = '❌ Error: ' + e.message;
+        document.getElementById('attendance-msg').style.color = 'red';
+      }
+    }
+
+    async function loadAttendance(){
+      if(!currentDoctor) return;
+      try{
+        const list = await api(`/api/doctors/attendance/${currentDoctor.doctorId}`);
+        const historyDiv = document.getElementById('attendance-history');
+        if(list.length === 0){
+          historyDiv.innerHTML = '<p class="muted">No attendance records yet</p>';
+          return;
+        }
+        let html = '<table border="1" style="width:100%; border-collapse:collapse;"><tr style="background:#f0f0f0;"><th>Date</th><th>Status</th><th>Shift</th><th>Marked By</th></tr>';
+        list.forEach(att => {
+          html += `<tr><td>${new Date(att.date).toLocaleDateString()}</td><td>${att.availability}</td><td>${att.shift}</td><td>${att.markedBy || 'N/A'}</td></tr>`;
+        });
+        html += '</table>';
+        historyDiv.innerHTML = html;
+      }catch(e){
+        document.getElementById('attendance-history').innerHTML = '<p class="muted">Error loading attendance</p>';
+      }
+    }
+
+    function initializeNavigation() {
+      // Add navigation styles
+      Navigation.addStyles();
+      
+      // Create navigation
+      const nav = new Navigation('doctor', { doctor: currentDoctor });
+      document.getElementById('navigation-container').innerHTML = nav.render();
+    }
+
+    function showSection(sectionName) {
+      // Hide all sections
+      const sections = document.querySelectorAll('.portal-section');
+      sections.forEach(section => section.style.display = 'none');
+      
+      // Remove active class from all nav items
+      const navItems = document.querySelectorAll('.nav-item');
+      navItems.forEach(item => item.classList.remove('active'));
+      
+      // Show selected section
+      const targetSection = document.getElementById('section-' + sectionName);
+      if (targetSection) {
+        targetSection.style.display = 'block';
+      }
+      
+      // Add active class to clicked nav item
+      const activeNavItem = document.querySelector(`[data-section="${sectionName}"]`);
+      if (activeNavItem) {
+        activeNavItem.classList.add('active');
+      }
+      
+      // Call section-specific load functions
+      if (sectionName === 'dashboard') {
+        loadDashboard();
+      } else if (sectionName === 'attendance') {
+        // Set today's date
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date').value = today;
+        loadAttendance();
+      }
+    }
+
+    async function loadDashboard() {
+      if (!currentDoctor) return;
+      
+      try {
+        const attendanceList = await api(`/api/doctors/attendance/${currentDoctor.doctorId}`);
+        const recentAttendance = attendanceList.slice(0, 5); // Last 5 records
+        
+        document.getElementById('doctor-quick-stats').innerHTML = `
+          <div class="stat-item">
+            <strong>📅 Recent Attendance:</strong>
+            ${recentAttendance.length > 0 ? 
+              recentAttendance.map(a => `${new Date(a.date).toLocaleDateString()}: ${a.availability} (${a.shift})`).join('<br>') :
+              'No recent attendance records'
+            }
+          </div>
+          <div class="stat-item">
+            <strong>👨‍⚕️ Status:</strong> ${currentDoctor.availability || 'Not Available'}
+          </div>
+          <div class="stat-item">
+            <strong>🕐 Shift:</strong> ${currentDoctor.shift || 'Morning'}
+          </div>
+        `;
+      } catch (error) {
+        document.getElementById('doctor-quick-stats').innerHTML = 'Error loading stats';
+      }
+    }
+
+    async function loadAttendance(){
+      if(!currentDoctor) return;
+      try{
+        const list = await api(`/api/doctors/attendance/${currentDoctor.doctorId}`);
+        const historyDiv = document.getElementById('attendance-history');
+        if(list.length === 0){
+          historyDiv.innerHTML = '<p class="muted">No attendance records yet</p>';
+          return;
+        }
+        let html = '<table border="1" style="width:100%; border-collapse:collapse;"><tr style="background:#f0f0f0;"><th>Date</th><th>Status</th><th>Shift</th><th>Marked By</th></tr>';
+        list.forEach(att => {
+          html += `<tr><td>${new Date(att.date).toLocaleDateString()}</td><td>${att.availability}</td><td>${att.shift}</td><td>${att.markedBy || 'N/A'}</td></tr>`;
+        });
+        html += '</table>';
+        historyDiv.innerHTML = html;
+      }catch(e){
+        document.getElementById('attendance-history').innerHTML = '<p class="muted">Error loading attendance</p>';
+      }
+    }
+
+    async function fetchQr(){
+      if(!currentDoctor) return alert('Please login first');
+      try{
+        const res = await api(`/api/doctors/${currentDoctor.doctorId}/attendance/qrs`);
+        document.getElementById('qr-links').innerHTML = `
+          <div style="margin: 10px 0;">
+            <a href="${res.present}" target="_blank" style="display: inline-block; padding: 8px 12px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; margin-right: 10px;">Present QR</a>
+            <a href="${res.absent}" target="_blank" style="display: inline-block; padding: 8px 12px; background: #dc3545; color: white; text-decoration: none; border-radius: 4px;">Absent QR</a>
+          </div>
+          <div style="font-size: 12px; color: #666;">
+            These QR codes are shared by all doctors in your hospital. Scan the appropriate code to mark attendance.
+          </div>
+        `;
+      }catch(e){
+        alert('Error fetching QR codes: ' + e.message);
+      }
+    }
+  </script>

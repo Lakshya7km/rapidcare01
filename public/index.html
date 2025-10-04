@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RapidCare</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script defer src="/js/client.js"></script>
+  <style>
+    .hero { background: linear-gradient(120deg,#0b6efd,#6610f2); color:#fff; padding:48px 24px; }
+    .hero h1 { margin:0 0 8px 0; font-size: 32px; }
+    .hero p { margin:0; opacity: 0.9; }
+
+    .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-top:16px; }
+    .card .subtitle { color:#666; margin-top:-6px; }
+
+    .tabs { display:flex; gap:8px; margin-top:12px; }
+    .tab { padding:8px 12px; border:1px solid #e6e6e6; background:#f8f9fa; border-radius:8px; cursor:pointer; }
+    .tab.active { background:#fff; border-color:#cfd3d7; }
+    .muted { color:#6c757d; }
+  </style>
+  </head>
+<body>
+  <section class="hero">
+    <h1>RapidCare Hospital Management System</h1>
+    <p class="muted">Fast triage, live beds, real-time emergency workflows.</p>
+    <div style="margin-top: 20px;">
+      <a href="/public.html" class="btn" style="background: var(--success-color);">Explore Hospitals</a>
+    </div>
+  </section>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-login" onclick="showTab('login')">Login</div>
+    <div class="tab" id="tab-register" onclick="showTab('register')">Register Hospital</div>
+  </div>
+
+  <div id="pane-login" class="grid" style="margin-top:12px; display: block;">
+    <div class="card" style="border-top-color: var(--primary-color);">
+      <h3>Reception Login</h3>
+      <p class="subtitle">Hospital administrative access</p>
+      <div class="form-group"><label>Hospital ID</label><input id="h-user" class="input" /></div>
+      <div class="form-group"><label>Password</label><input id="h-pass" class="input" type="password" /></div>
+      <button class="btn" onclick="loginHospital()">Login</button>
+      <div id="h-msg" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card" style="border-top-color: var(--success-color);">
+      <h3>Doctor Login</h3>
+      <p class="subtitle">Profile + attendance</p>
+      <div class="form-group"><label>Doctor ID</label><input id="d-user" class="input" /></div>
+      <div class="form-group"><label>Password</label><input id="d-pass" class="input" type="password" /></div>
+      <button class="btn" onclick="loginDoctor()">Login</button>
+      <div id="d-msg" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card" style="border-top-color: var(--danger-color);">
+      <h3>Ambulance Login</h3>
+      <p class="subtitle">EMT/Pilot emergency tools</p>
+      <div class="form-group"><label>Username (ambulanceId / emtId / pilotId)</label><input id="a-user" class="input" /></div>
+      <div class="form-group"><label>Password</label><input id="a-pass" class="input" type="password" /></div>
+      <button class="btn" onclick="loginAmbulance()">Login</button>
+      <div id="a-msg" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <div id="pane-register" class="grid" style="display:none; margin-top:12px;">
+    <div class="card" style="grid-column: 1 / -1; border-top-color: var(--success-color);">
+      <h3>New Hospital Registration</h3>
+      <p class="subtitle">Create a hospital profile to access Reception Portal</p>
+      <div class="grid" style="grid-template-columns: repeat(auto-fit,minmax(200px,1fr));">
+        <div class="form-group"><label>Hospital ID</label><input id="r-hid" class="input" /></div>
+        <div class="form-group"><label>Name</label><input id="r-name" class="input" /></div>
+        <div class="form-group"><label>Contact</label><input id="r-contact" class="input" /></div>
+        <div class="form-group"><label>Password</label><input id="r-pass" class="input" type="password" /></div>
+        <div class="form-group"><label>State</label><input id="r-state" class="input" /></div>
+        <div class="form-group"><label>District</label><input id="r-district" class="input" /></div>
+        <div class="form-group"><label>City</label><input id="r-city" class="input" /></div>
+        <div class="form-group"><label>Street</label><input id="r-street" class="input" /></div>
+      </div>
+      <button class="btn" onclick="registerHospital()">Register</button>
+      <div id="r-msg" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+</body>
+</body>
+<script>
+  function showTab(which){
+    const login = document.getElementById('pane-login');
+    const reg = document.getElementById('pane-register');
+    const tLogin = document.getElementById('tab-login');
+    const tReg = document.getElementById('tab-register');
+    if(which==='login'){ login.style.display=''; reg.style.display='none'; tLogin.classList.add('active'); tReg.classList.remove('active'); }
+    else { login.style.display='none'; reg.style.display=''; tLogin.classList.remove('active'); tReg.classList.add('active'); }
+  }
+
+  async function loginHospital(){
+    try{
+      const u = document.getElementById('h-user').value.trim();
+      const p = document.getElementById('h-pass').value;
+      const res = await login('hospital', u, p);
+      try{ localStorage.setItem('role','hospital'); localStorage.setItem('hospitalId', u); localStorage.removeItem('doctor'); localStorage.removeItem('ambulance'); }catch(e){}
+      document.getElementById('h-msg').innerText = 'Logged in. Opening Reception…';
+      setTimeout(()=>{ window.location.href = '/reception.html'; }, 500);
+    }catch(e){ document.getElementById('h-msg').innerText = 'Login failed'; }
+  }
+
+  async function loginDoctor(){
+    try{
+      const u = document.getElementById('d-user').value.trim();
+      const p = document.getElementById('d-pass').value;
+      const res = await login('doctor', u, p);
+      try{ localStorage.setItem('role','doctor'); localStorage.setItem('doctor', JSON.stringify(res.doctor||{})); localStorage.removeItem('hospitalId'); localStorage.removeItem('ambulance'); }catch(e){}
+      document.getElementById('d-msg').innerText = 'Logged in. Opening Doctor…';
+      setTimeout(()=>{ window.location.href = '/doctor.html'; }, 500);
+    }catch(e){ document.getElementById('d-msg').innerText = 'Login failed'; }
+  }
+
+  async function loginAmbulance(){
+    try{
+      const u = document.getElementById('a-user').value.trim();
+      const p = document.getElementById('a-pass').value;
+      const res = await login('ambulance', u, p);
+      try{
+        localStorage.setItem('role','ambulance');
+        localStorage.setItem('ambulance', JSON.stringify(res.ambulance||{}));
+        localStorage.setItem('jwt', res.token); // <-- ensure token is stored for auto-login
+        localStorage.removeItem('hospitalId');
+        localStorage.removeItem('doctor');
+      }catch(e){}
+      document.getElementById('a-msg').innerText = 'Logged in. Opening Ambulance…';
+      setTimeout(()=>{ window.location.href = '/ambulance.html'; }, 500);
+    }catch(e){ document.getElementById('a-msg').innerText = 'Login failed'; }
+  }
+
+  async function registerHospital(){
+    const body = {
+      hospitalId: document.getElementById('r-hid').value.trim(),
+      name: document.getElementById('r-name').value,
+      contact: document.getElementById('r-contact').value,
+      password: document.getElementById('r-pass').value,
+      address: {
+        state: document.getElementById('r-state').value,
+        district: document.getElementById('r-district').value,
+        city: document.getElementById('r-city').value,
+        street: document.getElementById('r-street').value
+      }
+    };
+    try{
+      await api('/api/hospital', { method:'POST', body: JSON.stringify(body) });
+      document.getElementById('r-msg').innerText = 'Registered. You can now log in.';
+      showTab('login');
+      document.getElementById('h-user').value = body.hospitalId;
+    }catch(e){ document.getElementById('r-msg').innerText = 'Registration failed'; }
+  }
+</script>
+</html>
+
+

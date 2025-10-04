@@ -1,0 +1,465 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Public Portal - RapidCare</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script defer src="/js/client.js"></script>
+  <script defer src="/js/navigation.js"></script>
+  <style>
+    body { font-family: system-ui, Arial; margin: 20px; }
+    .filters { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 10px; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    button { padding: 8px 12px; }
+    
+    /* Emergency Form Styles */
+    .emergency-form-container { max-width: 600px; margin: 0 auto; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 4px; font-weight: bold; }
+    .form-group input, .form-group select, .form-group textarea { 
+      width: 100%; 
+      padding: 8px; 
+      border: 1px solid #ddd; 
+      border-radius: 4px; 
+      font-size: 14px; 
+    }
+    .btn { 
+      padding: 10px 20px; 
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      font-weight: bold; 
+    }
+    .btn-danger { 
+      background: #dc3545; 
+      color: white; 
+    }
+    .btn-danger:hover { 
+      background: #c82333; 
+    }
+  </style>
+</head>
+<body>
+  <div id="navigation-container"></div>
+
+  <!-- Hospitals Section -->
+  <div id="section-hospitals" class="portal-section">
+    <h2>Hospitals</h2>
+    <div class="filters">
+      <input id="q" placeholder="Search hospitals by name, city, services..." oninput="filterHospitals()" />
+    </div>
+    <div id="list" class="grid"></div>
+  </div>
+
+  <!-- Emergency Request Section -->
+  <div id="section-emergency-request" class="portal-section" style="display: none;">
+    <h2>🚨 Emergency Request</h2>
+    <div class="emergency-form-container">
+      <div class="card">
+        <h3>Submit Emergency Request</h3>
+        <div class="form-group">
+          <label>Patient Name</label>
+          <input id="emergency-patient-name" placeholder="Enter patient name" />
+        </div>
+        <div class="form-group">
+          <label>Age</label>
+          <input id="emergency-patient-age" type="number" placeholder="Enter age" />
+        </div>
+        <div class="form-group">
+          <label>Gender</label>
+          <select id="emergency-patient-gender">
+            <option value="">Select Gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Emergency Type</label>
+          <select id="emergency-type">
+            <option value="">Select Emergency Type</option>
+            <option value="Cardiac">Cardiac Emergency</option>
+            <option value="Trauma">Trauma</option>
+            <option value="Respiratory">Respiratory</option>
+            <option value="Neurological">Neurological</option>
+            <option value="General">General Emergency</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Symptoms</label>
+          <textarea id="emergency-symptoms" placeholder="Describe the symptoms" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Contact Mobile</label>
+          <input id="emergency-contact" placeholder="Enter contact number" />
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <textarea id="emergency-address" placeholder="Enter patient address" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Preferred Hospital (Optional)</label>
+          <select id="emergency-hospital">
+            <option value="">Select Hospital (or leave blank for nearest)</option>
+          </select>
+        </div>
+        <button onclick="submitPublicEmergency()" class="btn btn-danger">Submit Emergency Request</button>
+        <div id="emergency-response" style="margin-top: 10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allHospitals = [];
+    
+    // Initialize navigation on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      initializeNavigation();
+      loadAllHospitals();
+      setupRealTimeListeners();
+    });
+    
+    function initializeNavigation() {
+      // Add navigation styles
+      Navigation.addStyles();
+      
+      // Create navigation
+      const nav = new Navigation('public', {});
+      document.getElementById('navigation-container').innerHTML = nav.render();
+    }
+
+    function showSection(sectionName) {
+      // Hide all sections
+      const sections = document.querySelectorAll('.portal-section');
+      sections.forEach(section => section.style.display = 'none');
+      
+      // Remove active class from all nav items
+      const navItems = document.querySelectorAll('.nav-item');
+      navItems.forEach(item => item.classList.remove('active'));
+      
+      // Show selected section
+      const targetSection = document.getElementById('section-' + sectionName);
+      if (targetSection) {
+        targetSection.style.display = 'block';
+      }
+      
+      // Add active class to clicked nav item
+      const activeNavItem = document.querySelector(`[data-section="${sectionName}"]`);
+      if (activeNavItem) {
+        activeNavItem.classList.add('active');
+      }
+      
+      // Call section-specific load functions
+      if (sectionName === 'emergency-request') {
+        loadEmergencyForm();
+      }
+    }
+    
+    // Load all hospitals automatically on page load
+    async function loadAllHospitals(){
+      try {
+        const hospitals = await api('/api/hospital');
+        allHospitals = hospitals;
+        displayHospitals(hospitals);
+      } catch(e) {
+        console.error('Error loading hospitals:', e);
+        document.getElementById('list').innerHTML = '<p>Error loading hospitals. Please try again.</p>';
+      }
+    }
+    
+    // Filter hospitals (single search box)
+    function filterHospitals(){
+      const q = (document.getElementById('q').value || '').toLowerCase();
+      if(!q){ displayHospitals(allHospitals); return; }
+      const filter = (s) => (s||'').toLowerCase().includes(q);
+      const filtered = allHospitals.filter(h =>
+        filter(h.name) ||
+        filter(h.hospitalId) ||
+        filter(h.contact) ||
+        filter(h.address?.state) ||
+        filter(h.address?.district) ||
+        filter(h.address?.city) ||
+        (h.services||[]).some(filter) ||
+        (h.facilities||[]).some(filter) ||
+        (h.treatment||[]).some(filter) ||
+        (h.surgery||[]).some(filter) ||
+        (h.therapy||[]).some(filter) ||
+        (h.insurance||[]).some(filter)
+      );
+      displayHospitals(filtered);
+    }
+    
+    // Display hospitals in card format
+    function displayHospitals(hospitals){
+      const container = document.getElementById('list');
+      container.innerHTML = '';
+      
+      if(hospitals.length === 0) {
+        container.innerHTML = '<p>No hospitals found matching your criteria.</p>';
+        return;
+      }
+      
+      for(const h of hospitals){
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML = `
+          <h3>${h.name || h.hospitalId}</h3>
+          <div><strong>Address:</strong> ${h.address?.state || ''}, ${h.address?.district || ''}, ${h.address?.city || ''}</div>
+          <div><strong>Contact:</strong> ${h.contact || 'Not provided'}</div>
+          <div><strong>Services:</strong> ${(h.services || []).join(', ') || 'Not specified'}</div>
+          <div><strong>Facilities:</strong> ${(h.facilities || []).join(', ') || 'Not specified'}</div>
+          <div class="row" style="margin-top: 10px;">
+            <button onclick="callHospital('${h.contact || ''}')">Call Hospital</button>
+            <button onclick="openEmergency('${h.hospitalId}','${h.contact || ''}')">Emergency Request</button>
+          </div>
+          <div id="bed-${h.hospitalId}" style="margin-top: 8px;">Beds: <em>loading...</em></div>
+          <div id="doc-${h.hospitalId}" style="margin-top: 8px;"><em>Loading doctors...</em></div>
+        `;
+        container.appendChild(el);
+        // fetch live bed counts and doctors
+        loadBedCount(h.hospitalId);
+        loadDoctors(h.hospitalId);
+      }
+    }
+
+    async function loadBedCount(hospitalId){
+      try{
+        const beds = await api(`/api/beds/${hospitalId}`);
+        const total = beds.length;
+        const occupied = beds.filter(b=>b.status==='Occupied').length;
+        const vacant = total - occupied;
+        document.getElementById(`bed-${hospitalId}`).innerText = `Beds Vacant: ${vacant} / ${total}`;
+      }catch(e){
+        document.getElementById(`bed-${hospitalId}`).innerText = 'Beds: unavailable';
+      }
+    }
+
+    function callHospital(contact){
+      if(!contact){ alert('No contact'); return; }
+      alert(`Simulating call to ${contact}`);
+    }
+
+    function openEmergency(hospitalId, contact){
+      // Navigate to emergency request section
+      showSection('emergency-request');
+      
+      // Pre-fill the hospital selection
+      const hospitalSelect = document.getElementById('emergency-hospital');
+      if(hospitalSelect){
+        hospitalSelect.value = hospitalId;
+      }
+      
+      // Scroll to the form
+      document.getElementById('section-emergency-request').scrollIntoView({ behavior: 'smooth' });
+      
+      // Focus on first input
+      setTimeout(() => {
+        document.getElementById('emergency-patient-name').focus();
+      }, 500);
+    }
+
+    async function loadDoctors(hospitalId){
+      try{
+        const list = await api(`/api/doctors/${hospitalId}`);
+        const html = list.map(d => `
+          <div class="row" style="gap:10px; margin-top:6px;">
+            <img src="${d.photoUrl||''}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px;background:#f2f2f2;"/>
+            <div>
+              <div><b>${d.name||d.doctorId}</b> – ${d.qualification||''}</div>
+              <div class="muted">${d.speciality||''} • ${d.availability||'Not Available'} • ${d.shift||''}</div>
+            </div>
+          </div>
+        `).join('');
+        document.getElementById(`doc-${hospitalId}`).innerHTML = html || '<em>No doctors found</em>';
+      }catch(e){ document.getElementById(`doc-${hospitalId}`).innerText = 'Doctors: unavailable'; }
+    }
+
+    function loadEmergencyForm() {
+      // Populate hospital dropdown
+      const hospitalSelect = document.getElementById('emergency-hospital');
+      hospitalSelect.innerHTML = '<option value="">Select Hospital (or leave blank for nearest)</option>';
+      
+      allHospitals.forEach(hospital => {
+        const option = document.createElement('option');
+        option.value = hospital.hospitalId;
+        option.textContent = `${hospital.name} (${hospital.address?.city || 'N/A'})`;
+        hospitalSelect.appendChild(option);
+      });
+    }
+
+    async function submitPublicEmergency() {
+      const patientName = document.getElementById('emergency-patient-name').value.trim();
+      const patientAge = document.getElementById('emergency-patient-age').value;
+      const patientGender = document.getElementById('emergency-patient-gender').value;
+      const emergencyType = document.getElementById('emergency-type').value;
+      const symptoms = document.getElementById('emergency-symptoms').value.trim();
+      const contact = document.getElementById('emergency-contact').value.trim();
+      const address = document.getElementById('emergency-address').value.trim();
+      const preferredHospital = document.getElementById('emergency-hospital').value;
+
+      if (!patientName || !emergencyType) {
+        alert('Please fill in patient name and emergency type');
+        return;
+      }
+
+      const payload = {
+        hospitalId: preferredHospital || 'HOSP001', // Default to first hospital if none selected
+        patient: {
+          name: patientName,
+          age: parseInt(patientAge) || 0,
+          gender: patientGender || 'NA',
+          symptoms: symptoms || 'NA',
+          emergencyType: emergencyType,
+          contactMobile: contact || '',
+          contactAddress: address || ''
+        },
+        status: 'Pending'
+      };
+
+      try {
+        const response = await fetch('/api/emergency/public', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          document.getElementById('emergency-response').innerHTML = `
+            <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 10px; border-radius: 4px;">
+              <strong>✅ ${result.message || 'Emergency request submitted successfully!'}</strong><br>
+              <small>⏰ Please wait. Hospital staff will reach you within minutes at the provided mobile number.</small>
+            </div>
+          `;
+          
+          // Optional: Trigger call to hospital if contact number available
+          // Removed as per user request - form is sent directly to reception
+          
+          // Clear form
+          document.getElementById('emergency-patient-name').value = '';
+          document.getElementById('emergency-patient-age').value = '';
+          document.getElementById('emergency-patient-gender').value = '';
+          document.getElementById('emergency-type').value = '';
+          document.getElementById('emergency-symptoms').value = '';
+          document.getElementById('emergency-contact').value = '';
+          document.getElementById('emergency-address').value = '';
+          document.getElementById('emergency-hospital').value = '';
+        } else {
+          throw new Error('Failed to submit emergency request');
+        }
+      } catch (error) {
+        document.getElementById('emergency-response').innerHTML = `
+          <div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 10px; border-radius: 4px;">
+            <strong>❌ Error:</strong> ${error.message}
+          </div>
+        `;
+      }
+    }
+
+    function setupRealTimeListeners() {
+      // Listen for bed status updates
+      window.socket.on('bed:publicUpdate', (payload) => {
+        console.log('🛏️ Bed update received:', payload);
+        // Reload bed count for the specific hospital
+        loadBedCount(payload.hospitalId);
+      });
+
+      // Listen for doctor availability updates
+      window.socket.on('doctor:publicUpdate', (payload) => {
+        console.log('👨‍⚕️ Doctor update received:', payload);
+        // Reload doctors for the specific hospital
+        loadDoctors(payload.hospitalId);
+      });
+
+      // Listen for hospital info updates
+      window.socket.on('hospital:publicUpdate', (payload) => {
+        console.log('🏥 Hospital update received:', payload);
+        // Reload all hospitals to reflect changes
+        loadAllHospitals();
+      });
+
+      // Listen for database reset
+      window.socket.on('database:reset', (payload) => {
+        console.log('🔄 Database reset notification received');
+        // Reload all hospitals
+        loadAllHospitals();
+        
+        // Show notification
+        showNotification('Database has been reset with fresh data!', 'info');
+      });
+
+      // Listen for general notifications
+      window.socket.on('notification', (payload) => {
+        console.log('📢 Notification received:', payload);
+        showNotification(payload.message, payload.type);
+      });
+    }
+
+    function showNotification(message, type = 'info') {
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 6px;
+        color: white;
+        font-weight: bold;
+        z-index: 1000;
+        max-width: 300px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        animation: slideIn 0.3s ease-out;
+      `;
+
+      // Set background color based on type
+      switch (type) {
+        case 'success':
+          notification.style.background = '#28a745';
+          break;
+        case 'error':
+          notification.style.background = '#dc3545';
+          break;
+        case 'warning':
+          notification.style.background = '#ffc107';
+          notification.style.color = '#212529';
+          break;
+        default:
+          notification.style.background = '#17a2b8';
+      }
+
+      notification.textContent = message;
+      document.body.appendChild(notification);
+
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+          }
+        }, 300);
+      }, 5000);
+    }
+
+    // Add CSS animations for notifications
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>
+
+
