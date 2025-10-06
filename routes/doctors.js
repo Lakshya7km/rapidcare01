@@ -46,7 +46,7 @@ module.exports = (io) => {
         return res.status(400).json({ success: false, message: 'Doctor ID already exists' });
       }
       
-      const doc = new Doctor(req.body);
+      const doc = new Doctor({ password: 'test@1234', forcePasswordChange: true, ...req.body });
       await doc.save();
       res.json({ success: true, doctor: doc });
     } catch (err) {
@@ -75,13 +75,21 @@ module.exports = (io) => {
 
   router.post('/attendance', auth(['doctor', 'hospital']), async (req, res) => {
     try {
-      const { doctorId, date, availability, shift } = req.body;
+      const { doctorId, date, availability, shift, method } = req.body;
       const markedBy = req.user.role === 'doctor' ? 'Doctor' : 'Reception';
-      const d = new Attendance({ doctorId, date: new Date(date), availability, shift, markedBy });
-      await d.save();
-      res.json({ success: true, attendance: d });
+      if(!doctorId || !date || !availability){
+        return res.status(400).json({ success:false, message:'doctorId, date, availability are required' });
+      }
+      const day = new Date(date);
+      day.setHours(0,0,0,0);
+      const att = await Attendance.findOneAndUpdate(
+        { doctorId, date: day },
+        { $set: { availability, shift: shift || 'Morning', markedBy, method: method || 'Manual' } },
+        { upsert: true, new: true }
+      );
+      return res.json({ success: true, attendance: att });
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      return res.status(400).json({ success: false, message: err.message });
     }
   });
 

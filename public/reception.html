@@ -265,40 +265,43 @@
                style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px;"
                onkeyup="searchEmergencies()">
       </div>
+      
+      <!-- Emergency Stats -->
+      <div id="emergency-stats" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:20px;">
+        <div style="background:#fff3cd; border:1px solid #ffeaa7; padding:12px; border-radius:8px; text-align:center;">
+          <div style="font-size:24px; font-weight:bold; color:#856404;">⏳</div>
+          <div style="font-size:18px; font-weight:bold; color:#856404;" id="pending-count">0</div>
+          <div style="font-size:12px; color:#856404;">Pending</div>
+        </div>
+        <div style="background:#d4edda; border:1px solid #c3e6cb; padding:12px; border-radius:8px; text-align:center;">
+          <div style="font-size:24px; font-weight:bold; color:#155724;">✅</div>
+          <div style="font-size:18px; font-weight:bold; color:#155724;" id="accepted-count">0</div>
+          <div style="font-size:12px; color:#155724;">Accepted</div>
+        </div>
+        <div style="background:#f8d7da; border:1px solid #f5c6cb; padding:12px; border-radius:8px; text-align:center;">
+          <div style="font-size:24px; font-weight:bold; color:#721c24;">❌</div>
+          <div style="font-size:18px; font-weight:bold; color:#721c24;" id="rejected-count">0</div>
+          <div style="font-size:12px; color:#721c24;">Rejected</div>
+        </div>
+        <div style="background:#d1ecf1; border:1px solid #bee5eb; padding:12px; border-radius:8px; text-align:center;">
+          <div style="font-size:24px; font-weight:bold; color:#0c5460;">🔄</div>
+          <div style="font-size:18px; font-weight:bold; color:#0c5460;" id="transferred-count">0</div>
+          <div style="font-size:12px; color:#0c5460;">Transferred</div>
+        </div>
+      </div>
+      
       <div id="emergencies-cards" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px;"></div>
     </div>
 
     <!-- Emergency Detail Modal -->
     <div id="emergency-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; overflow:auto;">
-      <div style="background:white; margin:50px auto; max-width:600px; border-radius:10px; padding:20px; position:relative;">
+      <div style="background:white; margin:20px auto; max-width:800px; border-radius:10px; padding:20px; position:relative; max-height:90vh; overflow-y:auto;">
         <button onclick="closeEmergencyModal()" style="position:absolute; top:10px; right:10px; background:#dc3545; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">✕</button>
-        <h3 id="modal-title">Emergency Details</h3>
-        <div id="modal-content"></div>
-        <div style="margin-top:20px; padding:15px; background:#f8f9fa; border-radius:5px;">
-          <h4>Quick Actions</h4>
-          <div style="display:flex; gap:8px; margin-bottom:15px;">
-            <button onclick="quickAccept()" style="background:#28a745; color:white; flex:1;">✓ Accept</button>
-            <button onclick="quickReject()" style="background:#dc3545; color:white; flex:1;">✗ Reject</button>
-            <button onclick="quickTransfer()" style="background:#17a2b8; color:white; flex:1;">⇄ Transfer</button>
-          </div>
-          <div style="margin-bottom:15px; padding:10px; background:#fff3cd; border:1px solid #ffc107; border-radius:4px;">
-            <label><input type="checkbox" id="modal-assisted" /> Mark as Assisted</label>
-            <textarea id="modal-assisted-comment" placeholder="Comments about assistance provided..." rows="2" style="width:100%; margin-top:5px; padding:5px;"></textarea>
-          </div>
-          <h4>Update Status (Advanced)</h4>
-          <label>Remarks</label>
-          <textarea id="modal-remarks" style="width:100%; padding:8px; margin-bottom:10px;" rows="2"></textarea>
-          <label>Rejection Reason (if Denied)</label>
-          <input id="modal-reason" style="width:100%; padding:8px; margin-bottom:10px;" />
-          <label>Alternate Hospitals (comma separated)</label>
-          <input id="modal-alts" style="width:100%; padding:8px; margin-bottom:10px;" />
-          <button onclick="recommendAltsModal()" style="margin-right:6px;">Recommend Alts</button>
-          <button onclick="updateEmergencyModal()" style="background:#28a745; color:white;">Send Reply</button>
-          <div id="modal-msg" style="margin-top:8px;"></div>
+        <div id="emergency-modal-content">
+          <!-- Content will be populated by JavaScript -->
         </div>
       </div>
     </div>
-  </div>
 
   <!-- Update DBMS Section -->
   <div id="section-dbms" class="portal-section" style="display: none;">
@@ -761,7 +764,7 @@
       
       try{
         await api('/api/doctors', { method:'POST', body: JSON.stringify(body) });
-        alert('✅ Doctor registered successfully! Default password: test@123');
+        alert('✅ Doctor registered successfully! Default password: test@1234');
         // Clear form
         document.getElementById('doc-id').value = '';
         document.getElementById('doc-name').value = '';
@@ -1018,10 +1021,11 @@
       }
       try{
         console.log('Loading emergencies for hospital:', currentHospitalId);
-        const publicEm = await api('/api/emergency/public/all');
+        const publicEm = await api(`/api/emergency/public/${currentHospitalId}`);
         const ambulanceEm = await api(`/api/emergency/ambulance/${currentHospitalId}`);
         allEmergencies = [...publicEm, ...ambulanceEm].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
         renderEmergencyCards();
+        updateEmergencyStats(allEmergencies);
       }catch(e){
         console.error('Error loading emergencies:', e);
       }
@@ -1117,47 +1121,159 @@
 
     function openEmergencyModal(em){
       selectedEmergency = em;
-      document.getElementById('modal-title').innerText = `Emergency: ${em.patient?.name || 'Unknown'}`;
-      document.getElementById('modal-content').innerHTML = `
-        <div style="line-height:1.8;">
-          <p><strong>Submitted By:</strong> ${em.submittedBy === 'public' ? '👤 Public' : '🚑 Ambulance'}</p>
-          <p><strong>Status:</strong> <span style="color:${em.status === 'Pending' ? '#ffc107' : em.status === 'Accepted' ? '#28a745' : '#dc3545'};">${em.status}</span></p>
-          <hr>
-          <h4>Patient Information</h4>
-          <p><strong>Name:</strong> ${em.patient?.name || 'N/A'}</p>
-          <p><strong>Age:</strong> ${em.patient?.age || 'N/A'} | <strong>Gender:</strong> ${em.patient?.gender || 'N/A'}</p>
-          <p><strong>Emergency Type:</strong> ${em.patient?.emergencyType || 'N/A'}</p>
-          <p><strong>Symptoms:</strong> ${em.patient?.symptoms || 'N/A'}</p>
-          <p><strong>Contact:</strong> ${em.patient?.contactMobile || 'N/A'}</p>
-          <p><strong>Address:</strong> ${em.patient?.contactAddress || 'N/A'}</p>
-          ${em.submittedBy === 'ambulance' ? `
-            <hr>
-            <h4>Ambulance Information</h4>
-            <p><strong>Ambulance ID:</strong> ${em.ambulanceId || 'N/A'}</p>
-            <p><strong>Ready Equipment:</strong> ${em.readyEquipment || 'N/A'}</p>
-            <p><strong>Reason:</strong> ${em.reason || 'N/A'}</p>
-            <p><strong>EMT Name:</strong> ${em.emtRef?.name || em.emtName || 'N/A'}</p>
-            <p><strong>EMT ID:</strong> ${em.emtRef?.emtId || em.emtId || 'N/A'}</p>
-            <p><strong>EMT Mobile:</strong> <a href="tel:${em.emtRef?.mobile || em.emtMobile}">${em.emtRef?.mobile || em.emtMobile || 'N/A'}</a></p>
-            <p><strong>Pilot Name:</strong> ${em.pilotRef?.name || em.pilotName || 'N/A'}</p>
-            <p><strong>Pilot ID:</strong> ${em.pilotRef?.pilotId || em.pilotId || 'N/A'}</p>
-            <p><strong>Pilot Mobile:</strong> <a href="tel:${em.pilotRef?.mobile || em.pilotMobile}">${em.pilotRef?.mobile || em.pilotMobile || 'N/A'}</a></p>
-            <p><strong>Ready Equipment:</strong> ${em.readyEquipment || 'N/A'}</p>
-            <p><strong>Reason:</strong> ${em.reason || 'N/A'}</p>
-          ` : ''}
-          ${em.submittedBy === 'public' && em.assisted ? `<p><strong>✅ Assisted:</strong> ${em.assistedComment || 'Yes'}</p>` : ''}
-          ${em.alternateHospitals?.length > 0 ? `<p><strong>Alternate Hospitals:</strong> ${em.alternateHospitals.join(', ')}</p>` : ''}
+      document.getElementById('emergency-modal-content').innerHTML = `
+        <h3 style="margin: 0 0 20px 0; color: #333;">🚨 Emergency Request Details</h3>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff;">
+            <h4 style="margin: 0 0 10px 0; color: #007bff;">📋 Request Information</h4>
+            <div style="line-height: 1.6;">
+              <div><strong>Request ID:</strong> ${em._id}</div>
+              <div><strong>Submitted By:</strong> ${em.submittedBy === 'public' ? '👤 Public User' : '🚑 Ambulance'}</div>
+              <div><strong>Status:</strong> <span style="background: ${em.status === 'Pending' ? '#ffc107' : em.status === 'Accepted' ? '#28a745' : '#dc3545'}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">${em.status}</span></div>
+              <div><strong>Submitted:</strong> ${new Date(em.createdAt).toLocaleString()}</div>
+              ${em.updatedAt ? `<div><strong>Last Updated:</strong> ${new Date(em.updatedAt).toLocaleString()}</div>` : ''}
+            </div>
+          </div>
+          
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
+            <h4 style="margin: 0 0 10px 0; color: #28a745;">👤 Patient Information</h4>
+            <div style="line-height: 1.6;">
+              <div><strong>Name:</strong> ${em.patient?.name || 'N/A'}</div>
+              <div><strong>Age:</strong> ${em.patient?.age || 'N/A'} | <strong>Gender:</strong> ${em.patient?.gender || 'N/A'}</div>
+              <div><strong>Emergency Type:</strong> ${em.patient?.emergencyType || 'N/A'}</div>
+              <div><strong>Contact:</strong> <a href="tel:${em.patient?.contactMobile}">${em.patient?.contactMobile || 'N/A'}</a></div>
+              <div><strong>Address:</strong> ${em.patient?.contactAddress || 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+        
+        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 10px 0; color: #856404;">🚨 Emergency Details</h4>
+          <div><strong>Symptoms:</strong> ${em.patient?.symptoms || 'N/A'}</div>
+        </div>
+        
+        ${em.submittedBy === 'ambulance' ? `
+          <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3; margin-bottom: 20px;">
+            <h4 style="margin: 0 0 10px 0; color: #2196f3;">🚑 Ambulance Information</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+              <div>
+                <div><strong>Ambulance ID:</strong> ${em.ambulanceId || 'N/A'}</div>
+                <div><strong>Ready Equipment:</strong> ${em.readyEquipment || 'N/A'}</div>
+                <div><strong>Reason:</strong> ${em.reason || 'N/A'}</div>
+              </div>
+              <div>
+                <div><strong>EMT:</strong> ${em.emtRef?.name || em.emtName || 'N/A'} (${em.emtRef?.emtId || em.emtId || 'N/A'})</div>
+                <div><strong>EMT Mobile:</strong> <a href="tel:${em.emtRef?.mobile || em.emtMobile}">${em.emtRef?.mobile || em.emtMobile || 'N/A'}</a></div>
+                <div><strong>Pilot:</strong> ${em.pilotRef?.name || em.pilotName || 'N/A'} (${em.pilotRef?.pilotId || em.pilotId || 'N/A'})</div>
+                <div><strong>Pilot Mobile:</strong> <a href="tel:${em.pilotRef?.mobile || em.pilotMobile}">${em.pilotRef?.mobile || em.pilotMobile || 'N/A'}</a></div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+        
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 15px 0;">💬 Reply to ${em.submittedBy === 'public' ? 'Patient' : 'Ambulance'}</h4>
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Response Status:</label>
+            <select id="reply-status" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+              <option value="Accepted" ${em.status === 'Accepted' ? 'selected' : ''}>✅ Accept Request</option>
+              <option value="Rejected" ${em.status === 'Rejected' ? 'selected' : ''}>❌ Reject Request</option>
+              <option value="Transferred" ${em.status === 'Transferred' ? 'selected' : ''}>🔄 Transfer to Another Hospital</option>
+              <option value="Pending" ${em.status === 'Pending' ? 'selected' : ''}>⏳ Keep Pending</option>
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Reply Message:</label>
+            <textarea id="reply-message" placeholder="Enter your response message..." rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Reason (if rejecting/transferring):</label>
+            <input type="text" id="reply-reason" placeholder="Enter reason for rejection or transfer..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button onclick="sendEmergencyReply()" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+              📤 Send Reply
+            </button>
+            <button onclick="closeEmergencyModal()" style="background: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+              Cancel
+            </button>
+          </div>
+          <div id="reply-status-msg" style="margin-top: 10px; padding: 10px; border-radius: 4px; display: none;"></div>
         </div>
       `;
-      document.getElementById('modal-status').value = em.status;
-      document.getElementById('modal-reason').value = em.reason || '';
-      document.getElementById('modal-alts').value = (em.alternateHospitals || []).join(', ');
       document.getElementById('emergency-modal').style.display = 'block';
     }
 
     function closeEmergencyModal(){
       document.getElementById('emergency-modal').style.display = 'none';
       selectedEmergency = null;
+    }
+
+    async function sendEmergencyReply(){
+      if(!selectedEmergency) return;
+      
+      const status = document.getElementById('reply-status').value;
+      const message = document.getElementById('reply-message').value.trim();
+      const reason = document.getElementById('reply-reason').value.trim();
+      
+      if(!message){
+        showReplyMessage('Please enter a reply message', 'error');
+        return;
+      }
+      
+      if((status === 'Rejected' || status === 'Transferred') && !reason){
+        showReplyMessage('Please enter a reason for rejection or transfer', 'error');
+        return;
+      }
+      
+      try{
+        showReplyMessage('Sending reply...', 'info');
+        
+        const response = await api(`/api/emergency/${selectedEmergency._id}/reply`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            status: status,
+            message: message,
+            reason: reason,
+            repliedBy: currentHospitalId,
+            repliedAt: new Date().toISOString()
+          })
+        });
+        
+        if(response.success){
+          showReplyMessage('✅ Reply sent successfully!', 'success');
+          setTimeout(() => {
+            closeEmergencyModal();
+            loadEmergencies();
+          }, 1500);
+        } else {
+          showReplyMessage('❌ Failed to send reply: ' + (response.message || 'Unknown error'), 'error');
+        }
+      } catch(e){
+        showReplyMessage('❌ Error sending reply: ' + e.message, 'error');
+      }
+    }
+
+    function showReplyMessage(message, type){
+      const msgDiv = document.getElementById('reply-status-msg');
+      msgDiv.style.display = 'block';
+      msgDiv.textContent = message;
+      msgDiv.style.background = type === 'success' ? '#d4edda' : type === 'error' ? '#f8d7da' : '#d1ecf1';
+      msgDiv.style.color = type === 'success' ? '#155724' : type === 'error' ? '#721c24' : '#0c5460';
+      msgDiv.style.border = type === 'success' ? '1px solid #c3e6cb' : type === 'error' ? '1px solid #f5c6cb' : '1px solid #bee5eb';
+    }
+
+    function updateEmergencyStats(emergencies){
+      const pending = emergencies.filter(e => e.status === 'Pending').length;
+      const accepted = emergencies.filter(e => e.status === 'Accepted').length;
+      const rejected = emergencies.filter(e => e.status === 'Rejected').length;
+      const transferred = emergencies.filter(e => e.status === 'Transferred').length;
+      
+      document.getElementById('pending-count').textContent = pending;
+      document.getElementById('accepted-count').textContent = accepted;
+      document.getElementById('rejected-count').textContent = rejected;
+      document.getElementById('transferred-count').textContent = transferred;
     }
 
     async function updateEmergencyStatus(emergencyId, status, data = {}) {

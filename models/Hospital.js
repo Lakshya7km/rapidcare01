@@ -1,6 +1,6 @@
 // models/Hospital.js
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+// simplified: store plaintext password for now (no hashing)
 
 const addressSchema = new mongoose.Schema(
   {
@@ -40,17 +40,8 @@ const HospitalSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-HospitalSchema.pre('save', async function(next){
-  if(!this.isModified('password')) return next();
-  try{
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  }catch(err){ next(err); }
-});
-
 HospitalSchema.methods.comparePassword = function(candidate){
-  return bcrypt.compare(candidate, this.password);
+  return candidate === this.password;
 };
 
 module.exports = mongoose.model('Hospital', HospitalSchema);

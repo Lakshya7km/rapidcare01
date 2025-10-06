@@ -150,7 +150,7 @@ module.exports = (io) => {
     }
   });
 
-  // Print attendance QR PDF
+  // Print attendance QR PDF (variant 1)
   router.get('/:hospitalId/attendance-qr-pdf', auth(['hospital']), async (req, res) => {
     try {
       const hospital = await Hospital.findOne({ hospitalId: req.params.hospitalId });
@@ -298,7 +298,7 @@ module.exports = (io) => {
 
       const att = await Attendance.findOneAndUpdate(
         { doctorId, date: today },
-        { $set: { availability: type, markedBy: 'Doctor' } },
+        { $set: { availability: type, markedBy: 'Doctor', method: 'QR' } },
         { upsert: true, new: true }
       );
 
@@ -308,60 +308,7 @@ module.exports = (io) => {
     }
   });
 
-  // Generate hospital attendance QR PDF
-  router.get('/:hospitalId/attendance-qr-pdf', auth(['hospital']), async (req, res) => {
-    try {
-      const hospital = await Hospital.findOne({ hospitalId: req.params.hospitalId });
-      if (!hospital) {
-        return res.status(404).json({ message: 'Hospital not found' });
-      }
-      
-      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-      const presentUrl = `${baseUrl}/api/hospital/${req.params.hospitalId}/attendance-scan?type=Present`;
-      const absentUrl = `${baseUrl}/api/hospital/${req.params.hospitalId}/attendance-scan?type=Absent`;
-      
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="attendance_qr_${req.params.hospitalId}.pdf"`);
-      
-      const PDFDocument = require('pdfkit');
-      const QRCode = require('qrcode');
-      
-      const doc = new PDFDocument({ size: 'A4', margin: 50 });
-      doc.pipe(res);
-      
-      // Header
-      doc.fontSize(20).text(`${hospital.name || req.params.hospitalId}`, 50, 50);
-      doc.fontSize(16).text('Doctor Attendance QR Codes', 50, 80);
-      doc.fontSize(12).text(`Generated on: ${new Date().toLocaleDateString()}`, 50, 110);
-      
-      // Present QR Code
-      doc.fontSize(14).text('PRESENT - Scan to Mark Present', 50, 150);
-      const presentQR = await QRCode.toBuffer(presentUrl);
-      doc.image(presentQR, 50, 170, { width: 200, height: 200 });
-      
-      // Absent QR Code
-      doc.fontSize(14).text('ABSENT - Scan to Mark Absent', 320, 150);
-      const absentQR = await QRCode.toBuffer(absentUrl);
-      doc.image(absentQR, 320, 170, { width: 200, height: 200 });
-      
-      // Instructions
-      doc.fontSize(10).text('Instructions:', 50, 400);
-      doc.text('1. Doctors should scan the appropriate QR code to mark their attendance', 50, 420);
-      doc.text('2. Each scan will prompt for Doctor ID if not provided in the URL', 50, 435);
-      doc.text('3. Attendance will be recorded with current date and time', 50, 450);
-      doc.text('4. Multiple scans on the same day will update the existing record', 50, 465);
-      
-      // URLs for reference
-      doc.fontSize(8).text(`Present URL: ${presentUrl}`, 50, 500);
-      doc.text(`Absent URL: ${absentUrl}`, 50, 515);
-      
-      doc.end();
-      
-    } catch (err) {
-      console.error('Attendance QR PDF generation error:', err);
-      res.status(500).json({ message: err.message });
-    }
-  });
+  // NOTE: Duplicate handler removed. Single attendance-qr-pdf route is defined above.
 
   return router;
 };

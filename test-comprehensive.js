@@ -143,7 +143,7 @@ async function testDoctorLogin() {
     const loginResponse = await axios.post(`${API_BASE}/auth/login`, {
       role: 'doctor',
       username: 'DOC100',
-      password: 'test@123'
+      password: 'test@1234'
     });
 
     if (loginResponse.data.token && loginResponse.data.doctor) {

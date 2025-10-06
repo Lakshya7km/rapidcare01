@@ -13,14 +13,18 @@ function signToken(payload){
 
 router.post('/login', async (req,res) => {
   try{
-    const { role, username, password } = req.body;
+    let { role, username, password } = req.body;
+    role = (role||'').trim().toLowerCase();
+    username = (username||'').trim();
+    password = password || '';
     let user = null;
     if(role === 'hospital'){
-      user = await Hospital.findOne({ hospitalId: username });
+      user = await Hospital.findOne({ hospitalId: { $regex: `^${username}$`, $options: 'i' } });
     } else if(role === 'doctor'){
-      user = await Doctor.findOne({ doctorId: username });
+      user = await Doctor.findOne({ doctorId: { $regex: `^${username}$`, $options: 'i' } });
     } else if(role === 'ambulance'){
-      user = await Ambulance.findOne({ $or: [{ 'emt.emtId': username }, { 'pilot.pilotId': username }, { ambulanceId: username }] });
+      const rx = { $regex: `^${username}$`, $options: 'i' };
+      user = await Ambulance.findOne({ $or: [{ 'emt.emtId': rx }, { 'pilot.pilotId': rx }, { ambulanceId: rx }] });
     } else {
       return res.status(400).json({ message: 'Invalid role' });
     }

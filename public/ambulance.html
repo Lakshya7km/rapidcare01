@@ -61,6 +61,13 @@
       <div id="ambulance-info" style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
         <strong>Ambulance:</strong> <span id="amb-info"></span>
       </div>
+      
+      <!-- Hospital Details in Dashboard -->
+      <div id="dashboard-hospital-details" style="background: #e3f2fd; padding: 15px; margin-bottom: 20px; border-radius: 8px; border-left: 4px solid #2196f3;">
+        <h4>🏥 Hospital Information</h4>
+        <div id="dashboard-hospital-info-content">Loading hospital details...</div>
+      </div>
+      
       <p>Welcome to the Ambulance Portal. Use the navigation above to manage your profile and emergency requests.</p>
       <div class="dashboard-stats">
         <div class="stat-card">
@@ -334,7 +341,7 @@
       if (!currentEmergencyId) return;
       
       try {
-        const response = await api(`/api/emergency/${currentEmergencyId}`);
+        const response = await api(`/api/emergency/id/${currentEmergencyId}`);
         const { status, rejectionReason, alternateHospitals } = response;
         
         let statusMessage = `Status: <strong>${status}</strong>`;
@@ -526,6 +533,9 @@
     async function loadDashboard() {
       if (!currentAmbulance) return;
       
+      // Load hospital details for dashboard
+      await loadDashboardHospitalDetails();
+      
       try {
         document.getElementById('ambulance-quick-stats').innerHTML = `
           <div class="stat-item">
@@ -545,6 +555,27 @@
         document.getElementById('ambulance-quick-stats').innerHTML = 'Error loading stats';
       }
     }
+
+    async function loadDashboardHospitalDetails(){
+      if(!currentAmbulance || !currentAmbulance.hospitalId) return;
+      try{
+        const hospital = await api(`/api/hospital/${currentAmbulance.hospitalId}`);
+        document.getElementById('dashboard-hospital-info-content').innerHTML = `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+            <div><strong>Hospital ID:</strong> ${hospital.hospitalId}</div>
+            <div><strong>Name:</strong> ${hospital.name || 'N/A'}</div>
+            <div><strong>Contact:</strong> ${hospital.contact || 'N/A'}</div>
+            <div><strong>Location:</strong> ${hospital.address ? `${hospital.address.city}, ${hospital.address.state}` : 'N/A'}</div>
+            <div style="grid-column: 1 / -1;"><strong>Services:</strong> ${hospital.services ? hospital.services.join(', ') : 'N/A'}</div>
+            <div style="grid-column: 1 / -1;"><strong>Specialties:</strong> ${hospital.treatment ? hospital.treatment.join(', ') : 'N/A'}</div>
+          </div>
+        `;
+      }catch(e){
+        document.getElementById('dashboard-hospital-info-content').innerHTML = '<p style="color: red;">Error loading hospital details: ' + e.message + '</p>';
+      }
+    }
+  </script>
+
   <script>
     async function verifyHospitalId(){
       if(!currentAmbulance) return alert('Please login first');

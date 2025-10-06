@@ -12,6 +12,7 @@ const BedSchema = new mongoose.Schema(
     qrCodeUrl: { type: String, default: '' },
     qrVacantUrl: { type: String, default: '' },
     qrOccupiedUrl: { type: String, default: '' },
+    lastUpdated: { type: Date },
   },
   { timestamps: true }
 );

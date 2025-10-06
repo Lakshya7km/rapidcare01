@@ -8,6 +8,7 @@ const AttendanceSchema = new mongoose.Schema(
     availability: { type: String, enum: ['Present', 'Absent'], required: true },
     shift: { type: String, enum: ['Morning', 'Afternoon', 'Evening', 'Night'], default: 'Morning' },
     markedBy: { type: String, enum: ['Doctor', 'Reception'], required: true },
+    method: { type: String, enum: ['Manual', 'QR'], required: false },
   },
   { timestamps: true }
 );

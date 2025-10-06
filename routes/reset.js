@@ -5,7 +5,7 @@ const Bed = require('../models/Bed');
 const Ambulance = require('../models/Ambulance');
 const Attendance = require('../models/Attendance');
 const EmergencyRequest = require('../models/EmergencyRequest');
-const bcrypt = require('bcrypt');
+// simplified: no hashing in reset
 
 module.exports = (io) => {
   const router = require('express').Router();
@@ -44,7 +44,7 @@ module.exports = (io) => {
           treatment: ['Cardiology', 'Orthopedics', 'Neurology', 'Pediatrics'],
           surgery: ['Appendectomy', 'Gallbladder', 'Hernia'],
           therapy: ['Physiotherapy', 'Occupational Therapy'],
-          password: await bcrypt.hash('test@1234', 10),
+          password: 'test@1234',
           forcePasswordChange: true
         },
         {
@@ -63,7 +63,7 @@ module.exports = (io) => {
           treatment: ['Neurology', 'Cardiology', 'Oncology'],
           surgery: ['Bypass', 'Brain Surgery', 'Cancer Surgery'],
           therapy: ['Occupational', 'Speech Therapy'],
-          password: await bcrypt.hash('test@1234', 10),
+          password: 'test@1234',
           forcePasswordChange: true
         },
         {
@@ -82,7 +82,7 @@ module.exports = (io) => {
           treatment: ['Gynecology', 'Pediatrics', 'General Medicine'],
           surgery: ['C-Section', 'Hysterectomy', 'Appendectomy'],
           therapy: ['Physiotherapy', 'Occupational Therapy'],
-          password: await bcrypt.hash('test@1234', 10),
+          password: 'test@1234',
           forcePasswordChange: true
         }
       ];
@@ -100,7 +100,7 @@ module.exports = (io) => {
           speciality: 'Cardiology', 
           experience: '10 yrs',
           photoUrl: '',
-          password: await bcrypt.hash('test@123', 10), 
+          password: 'test@1234', 
           forcePasswordChange: true,
           availability: 'Available',
           shift: 'Morning'
@@ -113,7 +113,7 @@ module.exports = (io) => {
           speciality: 'Orthopedics', 
           experience: '7 yrs',
           photoUrl: '',
-          password: await bcrypt.hash('test@123', 10), 
+          password: 'test@1234', 
           forcePasswordChange: true,
           availability: 'Available',
           shift: 'Afternoon'
@@ -126,7 +126,7 @@ module.exports = (io) => {
           speciality: 'Neurology', 
           experience: '12 yrs',
           photoUrl: '',
-          password: await bcrypt.hash('test@123', 10), 
+          password: 'test@1234', 
           forcePasswordChange: true,
           availability: 'Not Available',
           shift: 'Evening'
@@ -139,7 +139,7 @@ module.exports = (io) => {
           speciality: 'Gynecology', 
           experience: '8 yrs',
           photoUrl: '',
-          password: await bcrypt.hash('test@123', 10), 
+          password: 'test@1234', 
           forcePasswordChange: true,
           availability: 'Available',
           shift: 'Morning'

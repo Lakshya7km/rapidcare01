@@ -15,7 +15,8 @@ const EmergencySchema = new mongoose.Schema(
     hospitalId: { type: String, index: true },
     ambulanceId: String,
     readyEquipment: String,
-    status: { type: String, enum: ['Pending', 'Accepted', 'Denied', 'Transferred', 'Handled'], default: 'Pending' },
+    // Include both 'Denied' and 'Rejected' for backward-compat; UI uses 'Rejected'
+    status: { type: String, enum: ['Pending', 'Accepted', 'Denied', 'Rejected', 'Transferred', 'Handled'], default: 'Pending' },
     reason: String,
     alternateHospitals: [String],
     selectedHospital: String,
@@ -34,6 +35,11 @@ const EmergencySchema = new mongoose.Schema(
     assistedComment: String,
     handled: { type: Boolean, default: false },
     handledAt: Date,
+    // Reply fields
+    replyMessage: String,
+    replyReason: String,
+    repliedBy: String,
+    repliedAt: Date,
   },
   { timestamps: true }
 );

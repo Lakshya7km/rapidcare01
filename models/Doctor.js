@@ -1,6 +1,6 @@
 // models/Doctor.js
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+// simplified: store plaintext password for now (no hashing)
 
 const DoctorSchema = new mongoose.Schema(
   {
@@ -11,7 +11,7 @@ const DoctorSchema = new mongoose.Schema(
     speciality: String,
     experience: String,
     photoUrl: String,
-    password: { type: String, default: 'test@123' },
+    password: { type: String, default: 'test@1234' },
     forcePasswordChange: { type: Boolean, default: true },
     availability: { type: String, enum: ['Available', 'Not Available'], default: 'Not Available' },
     shift: { type: String, enum: ['Morning', 'Afternoon', 'Evening', 'Night'], default: 'Morning' },
@@ -27,17 +27,8 @@ const DoctorSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-DoctorSchema.pre('save', async function(next){
-  if(!this.isModified('password')) return next();
-  try{
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  }catch(err){ next(err); }
-});
-
 DoctorSchema.methods.comparePassword = function(candidate){
-  return bcrypt.compare(candidate, this.password);
+  return candidate === this.password;
 };
 
 module.exports = mongoose.model('Doctor', DoctorSchema);

@@ -1,6 +1,6 @@
 // models/Ambulance.js
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+// simplified: store plaintext password for now (no hashing)
 
 const AmbulanceSchema = new mongoose.Schema(
   {
@@ -27,17 +27,8 @@ const AmbulanceSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-AmbulanceSchema.pre('save', async function(next){
-  if(!this.isModified('password')) return next();
-  try{
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  }catch(err){ next(err); }
-});
-
 AmbulanceSchema.methods.comparePassword = function(candidate){
-  return bcrypt.compare(candidate, this.password);
+  return candidate === this.password;
 };
 
 module.exports = mongoose.model('Ambulance', AmbulanceSchema);

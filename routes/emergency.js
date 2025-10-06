@@ -8,12 +8,30 @@ const Bed = require('../models/Bed');
 const { auth } = require('../middleware/auth');
 
 module.exports = (io) => {
+  // Get emergency by ID (for authenticated portals)
+  router.get('/id/:id', async (req, res) => {
+    try {
+      const em = await Emergency.findById(req.params.id);
+      if (!em) return res.status(404).json({ message: 'Not found' });
+      return res.json(em);
+    } catch (err) {
+      return res.status(400).json({ message: err.message });
+    }
+  });
+
   // Public emergency submission (no auth required)
   router.post('/public', async (req, res) => {
     try {
       const payload = req.body;
       payload.submittedBy = 'public';
-      payload.hospitalId = null; // Reception will assign
+      // Assign to selected hospital if provided; otherwise reject for clarity
+      if (!payload.hospitalId || typeof payload.hospitalId !== 'string' || payload.hospitalId.trim() === '') {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'A target hospitalId is required to submit an emergency request' 
+        });
+      }
+      payload.hospitalId = payload.hospitalId.trim();
       payload.status = 'Pending';
       
       // Validate required fields
@@ -26,8 +44,8 @@ module.exports = (io) => {
       
       const em = new Emergency(payload);
       await em.save();
-      // Notify all hospitals or specific hospital if provided
-      io.emit('emergency:new:public', em);
+      // Notify only the selected hospital reception room
+      io.to(`hospital_${em.hospitalId}`).emit('emergency:new:public', em);
       res.json({ success: true, message: 'Emergency request submitted. Hospital will contact you shortly.', emergency: em });
     } catch (err) {
       console.error('Public emergency submission error:', err);
@@ -82,11 +100,119 @@ module.exports = (io) => {
     res.json(list);
   });
 
-  // Get ambulance emergencies for a hospital
-  router.get('/ambulance/:hospitalId', auth(['hospital']), async (req, res) => {
-    const list = await Emergency.find({ submittedBy: 'ambulance', hospitalId: req.params.hospitalId }).sort({ createdAt: -1 });
-    res.json(list);
+  // Get public emergencies for a specific hospital
+  router.get('/public/:hospitalId', async (req, res) => {
+    try {
+      const list = await Emergency.find({ 
+        hospitalId: req.params.hospitalId, 
+        submittedBy: 'public' 
+      }).sort({ createdAt: -1 });
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
   });
+
+  // Get ambulance emergencies for a specific hospital
+  router.get('/ambulance/:hospitalId', async (req, res) => {
+    try {
+      const list = await Emergency.find({ 
+        hospitalId: req.params.hospitalId, 
+        submittedBy: 'ambulance' 
+      }).sort({ createdAt: -1 });
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Reply to emergency request
+  router.put('/:id/reply', auth(['hospital']), async (req, res) => {
+    try {
+      const { status, message, reason, repliedBy, repliedAt } = req.body;
+      
+      if (!status || !message) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Status and message are required' 
+        });
+      }
+
+      const emergency = await Emergency.findById(req.params.id);
+      if (!emergency) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Emergency not found' 
+        });
+      }
+
+      // Update emergency with reply
+      const updated = await Emergency.findByIdAndUpdate(
+        req.params.id,
+        { 
+          $set: { 
+            status: status,
+            replyMessage: message,
+            replyReason: reason,
+            repliedBy: repliedBy,
+            repliedAt: repliedAt || new Date(),
+            updatedAt: new Date()
+          }
+        },
+        { new: true }
+      );
+
+      // Notify the submitter (public or ambulance) about the reply
+      if (emergency.submittedBy === 'public') {
+        // For public users, we could emit to a general room or store for polling
+        io.emit('emergency:reply:public', {
+          emergencyId: emergency._id,
+          status: status,
+          message: message,
+          reason: reason
+        });
+      } else if (emergency.submittedBy === 'ambulance') {
+        // Notify the specific ambulance
+        io.to(`ambulance_${emergency.ambulanceId}`).emit('emergency:reply:ambulance', {
+          emergencyId: emergency._id,
+          status: status,
+          message: message,
+          reason: reason
+        });
+      }
+
+      res.json({ success: true, emergency: updated });
+    } catch (err) {
+      console.error('Emergency reply error:', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Get public emergencies for a specific hospital (duplicate removed)
+
+  // Public: Get emergency detail by ID (no auth; shows limited fields)
+  router.get('/detail/:id', async (req, res) => {
+    try{
+      const em = await Emergency.findById(req.params.id).lean();
+      if(!em) return res.status(404).json({ success:false, message: 'Not found' });
+      // Return safe subset for public
+      const safe = {
+        _id: em._id,
+        createdAt: em.createdAt,
+        updatedAt: em.updatedAt,
+        status: em.status,
+        hospitalId: em.hospitalId,
+        rejectionReason: em.rejectionReason || em.reason || '',
+        alternateHospitals: em.alternateHospitals || [],
+        selectedHospital: em.selectedHospital || '',
+      };
+      return res.json({ success:true, emergency: safe });
+    }catch(err){
+      return res.status(400).json({ success:false, message: err.message });
+    }
+  });
+
+  // Get ambulance emergencies for a hospital (duplicate removed - using the one above)
 
   // Accept emergency
   router.put('/:id/accept', auth(['hospital']), async (req, res) => {
@@ -126,7 +252,7 @@ module.exports = (io) => {
     }
   });
 
-  // Reject emergency
+  // Reject emergency (standardize to 'Rejected' in status)
   router.put('/:id/reject', auth(['hospital']), async (req, res) => {
     try {
       const { rejectionReason, alternateHospitals } = req.body;
@@ -142,7 +268,7 @@ module.exports = (io) => {
       const em = await Emergency.findByIdAndUpdate(
         req.params.id,
         { $set: { 
-          status: 'Denied', 
+          status: 'Rejected', 
           rejectionReason: rejectionReason.trim(), 
           alternateHospitals: alternateHospitals || [], 
           handledBy: req.user.ref,
@@ -158,7 +284,7 @@ module.exports = (io) => {
       if (em.ambulanceId) {
         io.to(`ambulance_${em.ambulanceId}`).emit('emergency:response', {
           requestId: em._id,
-          status: 'Denied',
+          status: 'Rejected',
           hospital: req.user.ref,
           message: 'Your emergency request has been denied by the hospital.',
           reason: rejectionReason,

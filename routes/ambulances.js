@@ -41,7 +41,7 @@ module.exports = (io) => {
         return res.status(400).json({ success: false, message: 'Ambulance ID already exists' });
       }
       
-      const amb = new Ambulance(req.body);
+      const amb = new Ambulance({ password: 'test@1234', forcePasswordChange: true, status: 'Offline', ...req.body });
       await amb.save();
       res.json({ success: true, ambulance: amb });
     } catch (err) {

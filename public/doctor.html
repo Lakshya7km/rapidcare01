@@ -7,6 +7,7 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="/js/client.js"></script>
   <script src="/js/navigation.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body { font-family: system-ui, Arial; margin: 20px; }
     label { display:block; margin-top:6px; }
@@ -57,7 +58,26 @@
       <div id="doctor-info" style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
         <strong>Doctor:</strong> <span id="doc-info"></span>
       </div>
-      <p>Welcome to the Doctor Portal. Use the navigation above to manage your profile and attendance.</p>
+      
+      <!-- Hospital Details in Dashboard -->
+      <div id="dashboard-hospital-details" style="background: #e3f2fd; padding: 15px; margin-bottom: 20px; border-radius: 8px; border-left: 4px solid #2196f3;">
+        <h4>🏥 Hospital Information</h4>
+        <div id="dashboard-hospital-info-content">Loading hospital details...</div>
+      </div>
+      
+      <!-- Quick Actions -->
+      <div style="background: #f8f9fa; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
+        <h4>⚡ Quick Actions</h4>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button onclick="showSection('attendance')" style="background: #28a745; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer;">
+            📅 Mark Attendance
+          </button>
+          <button onclick="showSection('profile')" style="background: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer;">
+            👤 Update Profile
+          </button>
+        </div>
+      </div>
+      
       <div class="dashboard-stats">
         <div class="stat-card">
           <h4>Quick Stats</h4>
@@ -74,16 +94,63 @@
       <div id="doctor-info-profile" style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
         <strong>Doctor:</strong> <span id="doc-info-profile"></span>
       </div>
+      
+      <!-- Hospital Details Section -->
+      <div id="hospital-details" style="background: #e3f2fd; padding: 15px; margin-bottom: 20px; border-radius: 8px; border-left: 4px solid #2196f3;">
+        <h4>🏥 Hospital Information</h4>
+        <div id="hospital-info-content">Loading hospital details...</div>
+      </div>
+      
+      <h4>Personal Information</h4>
       <label>Name</label><input id="name" />
       <label>Qualification</label><input id="qualification" />
       <label>Speciality</label><input id="speciality" />
       <label>Experience</label><input id="experience" />
       <button onclick="saveProfile()">Update Profile</button>
+      <div id="profile-msg" style="margin-top:10px;"></div>
+      
       <div style="margin-top:20px; padding:10px; background:#f8f9fa; border-radius:5px;">
         <h4>Change Password</h4>
         <label>New Password</label><input id="new-password" type="password" />
         <button onclick="changePasswordDoctor()">Change Password</button>
         <div id="change-pass-msg" style="margin-top:6px;"></div>
+      </div>
+      
+      <!-- Attendance Section in Profile -->
+      <div style="margin-top:30px; padding:15px; background:#e8f5e8; border-radius:8px; border-left:4px solid #28a745;">
+        <h4>📅 My Attendance</h4>
+        <div style="margin-bottom:15px;">
+          <button onclick="showSection('attendance')" style="background: #28a745; color: white; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+            📅 Mark Attendance
+          </button>
+          <button onclick="loadAttendanceInProfile()" style="background: #007bff; color: white; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer;">
+            🔄 Refresh
+          </button>
+        </div>
+        
+        <!-- Quick Attendance Stats -->
+        <div id="profile-attendance-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
+          <div style="background: white; padding: 10px; border-radius: 5px; text-align: center; border: 1px solid #ddd;">
+            <div style="font-size: 18px; font-weight: bold; color: #28a745;" id="profile-present-count">0</div>
+            <div style="font-size: 12px; color: #666;">Present</div>
+          </div>
+          <div style="background: white; padding: 10px; border-radius: 5px; text-align: center; border: 1px solid #ddd;">
+            <div style="font-size: 18px; font-weight: bold; color: #dc3545;" id="profile-absent-count">0</div>
+            <div style="font-size: 12px; color: #666;">Absent</div>
+          </div>
+          <div style="background: white; padding: 10px; border-radius: 5px; text-align: center; border: 1px solid #ddd;">
+            <div style="font-size: 18px; font-weight: bold; color: #007bff;" id="profile-total-count">0</div>
+            <div style="font-size: 12px; color: #666;">Total Records</div>
+          </div>
+        </div>
+        
+        <!-- Recent Attendance History -->
+        <div>
+          <h5 style="margin: 0 0 10px 0; color: #333;">Recent Attendance History</h5>
+          <div id="profile-attendance-history" style="max-height: 200px; overflow-y: auto; background: white; border: 1px solid #ddd; border-radius: 5px;">
+            <p style="text-align: center; color: #666; padding: 20px;">Loading attendance...</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -92,16 +159,48 @@
   <div id="section-attendance" class="portal-section" style="display: none;">
     <div class="col">
       <h3>Attendance System</h3>
-      <div style="margin-bottom:8px;">
-        <button onclick="fetchQr()">Show Present/Absent QR</button>
-        <div id="qr-links" class="muted" style="margin-top:6px;"></div>
+      
+      <!-- QR Scanner Section -->
+      <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #007bff;">
+        <h4>📱 QR Code Scanner</h4>
+        <p style="margin: 0 0 15px 0; color: #666;">Use your camera to scan QR codes generated by reception for marking attendance.</p>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+          <button onclick="startQRScanner('Present')" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+            📷 Scan Present QR
+          </button>
+          <button onclick="startQRScanner('Absent')" style="background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+            📷 Scan Absent QR
+          </button>
+          <button onclick="stopQRScanner()" style="background: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+            🛑 Stop Scanner
+          </button>
+        </div>
+        
+        <!-- Camera Preview -->
+        <div id="qr-scanner-container" style="display: none; text-align: center;">
+          <video id="qr-video" width="300" height="200" style="border: 2px solid #007bff; border-radius: 8px; background: #000;"></video>
+          <div id="qr-result" style="margin-top: 10px; padding: 10px; border-radius: 5px; display: none;"></div>
+        </div>
       </div>
-      <div style="background: #e9ecef; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-        <strong>Instructions:</strong><br>
-        1. Click "Show Present/Absent QR" to get QR codes<br>
-        2. Scan the appropriate QR code to mark attendance<br>
-        3. Select your shift when prompted<br>
-        4. Attendance will be automatically recorded
+      
+      <!-- Manual QR Display (Fallback) -->
+      <div style="background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <h4>📋 Manual QR Codes (Fallback)</h4>
+        <p style="margin: 0 0 15px 0; color: #666;">If camera scanning doesn't work, you can use these QR codes:</p>
+        <div style="margin-bottom:8px;">
+          <button onclick="fetchQr()">Show Present/Absent QR</button>
+          <div id="qr-links" class="muted" style="margin-top:6px;"></div>
+        </div>
+      </div>
+      
+      <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin-bottom: 10px; border-left: 4px solid #ffc107;">
+        <strong>📝 Instructions:</strong><br>
+        1. <strong>Camera Method:</strong> Click "Scan Present/Absent QR" and allow camera access<br>
+        2. <strong>Point camera at QR code</strong> generated by reception<br>
+        3. <strong>Select your shift</strong> when prompted<br>
+        4. <strong>Attendance will be automatically recorded</strong><br>
+        5. <strong>Fallback:</strong> Use "Show Present/Absent QR" if camera doesn't work
       </div>
       <h4>Mark Attendance Manually</h4>
       <label>Date</label><input id="date" type="date" />
@@ -211,27 +310,67 @@
       document.getElementById('qualification').value = currentDoctor.qualification || '';
       document.getElementById('speciality').value = currentDoctor.speciality || '';
       document.getElementById('experience').value = currentDoctor.experience || '';
+      
+      // Load hospital details
+      await loadHospitalDetails();
+      
+      // Load attendance in profile
+      await loadAttendanceInProfile();
+    }
+
+    async function loadHospitalDetails(){
+      if(!currentDoctor || !currentDoctor.hospitalId) return;
+      try{
+        const hospital = await api(`/api/hospital/${currentDoctor.hospitalId}`);
+        document.getElementById('hospital-info-content').innerHTML = `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+            <div><strong>Hospital ID:</strong> ${hospital.hospitalId}</div>
+            <div><strong>Name:</strong> ${hospital.name || 'N/A'}</div>
+            <div><strong>Contact:</strong> ${hospital.contact || 'N/A'}</div>
+            <div><strong>Location:</strong> ${hospital.address ? `${hospital.address.city}, ${hospital.address.state}` : 'N/A'}</div>
+            <div style="grid-column: 1 / -1;"><strong>Services:</strong> ${hospital.services ? hospital.services.join(', ') : 'N/A'}</div>
+            <div style="grid-column: 1 / -1;"><strong>Specialties:</strong> ${hospital.treatment ? hospital.treatment.join(', ') : 'N/A'}</div>
+          </div>
+        `;
+      }catch(e){
+        document.getElementById('hospital-info-content').innerHTML = '<p style="color: red;">Error loading hospital details: ' + e.message + '</p>';
+      }
     }
 
     async function saveProfile(){
       if(!currentDoctor) return alert('Please login first');
-      const body = {
-        name: document.getElementById('name').value,
-        qualification: document.getElementById('qualification').value,
-        speciality: document.getElementById('speciality').value,
-        experience: document.getElementById('experience').value
-      };
+      
+      const name = document.getElementById('name').value.trim();
+      const qualification = document.getElementById('qualification').value.trim();
+      const speciality = document.getElementById('speciality').value.trim();
+      const experience = document.getElementById('experience').value.trim();
+      
+      if(!name){
+        document.getElementById('profile-msg').innerText = '❌ Name is required';
+        document.getElementById('profile-msg').style.color = 'red';
+        return;
+      }
+      
+      const body = { name, qualification, speciality, experience };
+      
       try{
+        document.getElementById('profile-msg').innerText = 'Updating profile...';
+        document.getElementById('profile-msg').style.color = 'blue';
+        
         await api(`/api/doctors/${currentDoctor.doctorId}`, { method:'PUT', body: JSON.stringify(body) });
-        alert('Profile updated successfully!');
+        
         // Reload doctor data
         const updatedDoctor = await api(`/api/doctors/doctor/${currentDoctor.doctorId}`);
         currentDoctor = updatedDoctor;
         localStorage.setItem('doctor', JSON.stringify(updatedDoctor));
         document.getElementById('doc-info').innerText = `${updatedDoctor.name || updatedDoctor.doctorId} - ${updatedDoctor.speciality || 'General'}`;
         document.getElementById('doc-info-profile').innerText = `${updatedDoctor.name || updatedDoctor.doctorId} - ${updatedDoctor.speciality || 'General'}`;
+        
+        document.getElementById('profile-msg').innerText = '✅ Profile updated successfully!';
+        document.getElementById('profile-msg').style.color = 'green';
       }catch(e){
-        alert('Error updating profile: ' + e.message);
+        document.getElementById('profile-msg').innerText = '❌ Error updating profile: ' + e.message;
+        document.getElementById('profile-msg').style.color = 'red';
       }
     }
 
@@ -315,6 +454,8 @@
       // Call section-specific load functions
       if (sectionName === 'dashboard') {
         loadDashboard();
+      } else if (sectionName === 'profile') {
+        loadDoctorProfile();
       } else if (sectionName === 'attendance') {
         // Set today's date
         const today = new Date().toISOString().split('T')[0];
@@ -325,6 +466,9 @@
 
     async function loadDashboard() {
       if (!currentDoctor) return;
+      
+      // Load hospital details for dashboard
+      await loadDashboardHospitalDetails();
       
       try {
         const attendanceList = await api(`/api/doctors/attendance/${currentDoctor.doctorId}`);
@@ -350,24 +494,243 @@
       }
     }
 
-    async function loadAttendance(){
+    async function loadDashboardHospitalDetails(){
+      if(!currentDoctor || !currentDoctor.hospitalId) return;
+      try{
+        const hospital = await api(`/api/hospital/${currentDoctor.hospitalId}`);
+        document.getElementById('dashboard-hospital-info-content').innerHTML = `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+            <div><strong>Hospital ID:</strong> ${hospital.hospitalId}</div>
+            <div><strong>Name:</strong> ${hospital.name || 'N/A'}</div>
+            <div><strong>Contact:</strong> ${hospital.contact || 'N/A'}</div>
+            <div><strong>Location:</strong> ${hospital.address ? `${hospital.address.city}, ${hospital.address.state}` : 'N/A'}</div>
+            <div style="grid-column: 1 / -1;"><strong>Services:</strong> ${hospital.services ? hospital.services.join(', ') : 'N/A'}</div>
+            <div style="grid-column: 1 / -1;"><strong>Specialties:</strong> ${hospital.treatment ? hospital.treatment.join(', ') : 'N/A'}</div>
+          </div>
+        `;
+      }catch(e){
+        document.getElementById('dashboard-hospital-info-content').innerHTML = '<p style="color: red;">Error loading hospital details: ' + e.message + '</p>';
+      }
+    }
+
+    async function loadAttendanceInProfile(){
       if(!currentDoctor) return;
       try{
         const list = await api(`/api/doctors/attendance/${currentDoctor.doctorId}`);
-        const historyDiv = document.getElementById('attendance-history');
+        const historyDiv = document.getElementById('profile-attendance-history');
+        
+        // Update stats
+        const presentCount = list.filter(att => att.availability === 'Present').length;
+        const absentCount = list.filter(att => att.availability === 'Absent').length;
+        const totalCount = list.length;
+        
+        document.getElementById('profile-present-count').textContent = presentCount;
+        document.getElementById('profile-absent-count').textContent = absentCount;
+        document.getElementById('profile-total-count').textContent = totalCount;
+        
         if(list.length === 0){
-          historyDiv.innerHTML = '<p class="muted">No attendance records yet</p>';
+          historyDiv.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No attendance records yet</p>';
           return;
         }
-        let html = '<table border="1" style="width:100%; border-collapse:collapse;"><tr style="background:#f0f0f0;"><th>Date</th><th>Status</th><th>Shift</th><th>Marked By</th></tr>';
-        list.forEach(att => {
-          html += `<tr><td>${new Date(att.date).toLocaleDateString()}</td><td>${att.availability}</td><td>${att.shift}</td><td>${att.markedBy || 'N/A'}</td></tr>`;
+        
+        // Show recent 10 records
+        const recentList = list.slice(0, 10);
+        let html = '<div style="padding: 10px;">';
+        recentList.forEach(att => {
+          const statusColor = att.availability === 'Present' ? '#28a745' : '#dc3545';
+          const statusIcon = att.availability === 'Present' ? '✅' : '❌';
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; font-size: 14px;">
+              <div>
+                <span style="font-weight: bold;">${new Date(att.date).toLocaleDateString()}</span>
+                <span style="margin-left: 10px; color: #666;">${att.shift}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="color: ${statusColor}; font-weight: bold;">${statusIcon} ${att.availability}</span>
+                <span style="font-size: 12px; color: #999;">${att.markedBy || 'N/A'}</span>
+              </div>
+            </div>
+          `;
         });
-        html += '</table>';
+        html += '</div>';
         historyDiv.innerHTML = html;
       }catch(e){
-        document.getElementById('attendance-history').innerHTML = '<p class="muted">Error loading attendance</p>';
+        document.getElementById('profile-attendance-history').innerHTML = '<p style="text-align: center; color: red; padding: 20px;">Error loading attendance</p>';
       }
+    }
+
+    // QR Scanner variables
+    let qrScanner = null;
+    let currentScanType = null;
+
+    async function startQRScanner(scanType) {
+      if (!currentDoctor) {
+        alert('Please login first');
+        return;
+      }
+
+      currentScanType = scanType;
+      const container = document.getElementById('qr-scanner-container');
+      const video = document.getElementById('qr-video');
+      const result = document.getElementById('qr-result');
+
+      try {
+        // Show scanner container
+        container.style.display = 'block';
+        result.style.display = 'none';
+
+        // Initialize QR scanner
+        qrScanner = new Html5QrcodeScanner("qr-scanner-container", {
+          qrbox: { width: 250, height: 250 },
+          fps: 20,
+          aspectRatio: 1.0
+        });
+
+        // Start scanning
+        qrScanner.render(onScanSuccess, onScanFailure);
+
+        // Show instruction
+        result.innerHTML = `
+          <div style="background: #d1ecf1; color: #0c5460; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+            <strong>📷 Camera Active</strong><br>
+            Point your camera at the ${scanType} QR code generated by reception.
+          </div>
+        `;
+        result.style.display = 'block';
+
+      } catch (err) {
+        console.error('QR Scanner error:', err);
+        result.innerHTML = `
+          <div style="background: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px;">
+            <strong>❌ Camera Error</strong><br>
+            ${err.message}<br>
+            <small>Please try the manual QR code method below.</small>
+          </div>
+        `;
+        result.style.display = 'block';
+      }
+    }
+
+    function stopQRScanner() {
+      if (qrScanner) {
+        qrScanner.clear();
+        qrScanner = null;
+      }
+      document.getElementById('qr-scanner-container').style.display = 'none';
+      document.getElementById('qr-result').style.display = 'none';
+      currentScanType = null;
+    }
+
+    async function onScanSuccess(decodedText, decodedResult) {
+      console.log('QR Code scanned:', decodedText);
+      
+      // Stop the scanner
+      stopQRScanner();
+
+      // Check if it's a valid attendance QR
+      if (decodedText.includes('/api/doctors/attendance/scan/')) {
+        try {
+          // Extract doctor ID and status from URL
+          const url = new URL(decodedText, window.location.origin);
+          const pathParts = url.pathname.split('/');
+          const doctorId = pathParts[pathParts.length - 1];
+          const status = url.searchParams.get('set');
+
+          if (doctorId && status && (status === 'Present' || status === 'Absent')) {
+            // Show shift selection
+            showShiftSelection(doctorId, status);
+          } else {
+            showQRResult('Invalid QR code format', 'error');
+          }
+        } catch (e) {
+          showQRResult('Error processing QR code: ' + e.message, 'error');
+        }
+      } else {
+        showQRResult('This is not a valid attendance QR code', 'error');
+      }
+    }
+
+    function onScanFailure(error) {
+      // Don't show every failure, just log it
+      console.log('QR scan failed:', error);
+    }
+
+    function showShiftSelection(doctorId, status) {
+      const result = document.getElementById('qr-result');
+      result.innerHTML = `
+        <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 5px;">
+          <h4 style="margin: 0 0 15px 0;">✅ QR Code Scanned Successfully!</h4>
+          <p><strong>Status:</strong> ${status}</p>
+          <p><strong>Doctor ID:</strong> ${doctorId}</p>
+          
+          <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Select Your Shift:</label>
+            <select id="qr-shift" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+              <option value="Morning">Morning</option>
+              <option value="Afternoon">Afternoon</option>
+              <option value="Evening">Evening</option>
+              <option value="Night">Night</option>
+            </select>
+          </div>
+          
+          <div style="display: flex; gap: 10px;">
+            <button onclick="submitQRAttendance('${doctorId}', '${status}')" 
+                    style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+              📝 Mark Attendance
+            </button>
+            <button onclick="stopQRScanner()" 
+                    style="background: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+      result.style.display = 'block';
+    }
+
+    async function submitQRAttendance(doctorId, status) {
+      const shift = document.getElementById('qr-shift').value;
+      
+      try {
+        const body = {
+          doctorId: doctorId,
+          date: new Date().toISOString().split('T')[0],
+          availability: status,
+          shift: shift,
+          markedBy: 'Doctor',
+          method: 'QR Scan'
+        };
+
+        await api('/api/doctors/attendance', { method: 'POST', body: JSON.stringify(body) });
+        
+        showQRResult(`
+          <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 5px;">
+            <h4 style="margin: 0 0 10px 0;">✅ Attendance Marked Successfully!</h4>
+            <p><strong>Status:</strong> ${status}</p>
+            <p><strong>Shift:</strong> ${shift}</p>
+            <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+            <p><strong>Time:</strong> ${new Date().toLocaleTimeString()}</p>
+          </div>
+        `, 'success');
+        
+        // Reload attendance data
+        loadAttendance();
+        loadAttendanceInProfile();
+        
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+          stopQRScanner();
+        }, 3000);
+
+      } catch (e) {
+        showQRResult('Error marking attendance: ' + e.message, 'error');
+      }
+    }
+
+    function showQRResult(message, type) {
+      const result = document.getElementById('qr-result');
+      result.innerHTML = message;
+      result.style.display = 'block';
     }
 
     async function fetchQr(){

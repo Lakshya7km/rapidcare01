@@ -305,8 +305,13 @@
         return;
       }
 
+      const fallbackHospitalId = preferredHospital || (allHospitals[0]?.hospitalId || '');
+      if(!fallbackHospitalId){
+        alert('No hospitals available at the moment. Please try again later.');
+        return;
+      }
       const payload = {
-        hospitalId: preferredHospital || 'HOSP001', // Default to first hospital if none selected
+        hospitalId: fallbackHospitalId, // Default to the first loaded hospital if none selected
         patient: {
           name: patientName,
           age: parseInt(patientAge) || 0,
@@ -320,6 +325,14 @@
       };
 
       try {
+        // Show loading state
+        document.getElementById('emergency-response').innerHTML = `
+          <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 10px; border-radius: 4px;">
+            <strong>⏳ Submitting emergency request...</strong><br>
+            <small>Please wait while we process your request.</small>
+          </div>
+        `;
+
         const response = await fetch('/api/emergency/public', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -329,14 +342,27 @@
         if (response.ok) {
           const result = await response.json();
           document.getElementById('emergency-response').innerHTML = `
-            <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 10px; border-radius: 4px;">
-              <strong>✅ ${result.message || 'Emergency request submitted successfully!'}</strong><br>
-              <small>⏰ Please wait. Hospital staff will reach you within minutes at the provided mobile number.</small>
+            <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 8px;">
+              <h4 style="margin: 0 0 10px 0; color: #155724;">✅ Emergency Request Submitted Successfully!</h4>
+              <div style="display: grid; gap: 8px;">
+                <div><strong>📋 Request ID:</strong> ${result.emergency?._id || 'N/A'}</div>
+                <div><strong>👤 Patient:</strong> ${patientName} (${patientAge}Y, ${patientGender})</div>
+                <div><strong>🏥 Sent to Hospital:</strong> ${fallbackHospitalId}</div>
+                <div><strong>🚨 Emergency Type:</strong> ${emergencyType}</div>
+                <div><strong>📞 Contact:</strong> ${contact || 'N/A'}</div>
+                <div><strong>⏳ Status:</strong> <span style="background: #ffc107; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 12px;">PENDING</span></div>
+                <div style="margin-top: 10px; padding: 8px; background: #fff3cd; border-radius: 4px; color: #856404;">
+                  <strong>📡 Waiting for hospital response...</strong><br>
+                  Hospital staff will contact you at ${contact || 'the provided number'} within minutes.
+                </div>
+              </div>
             </div>
           `;
           
-          // Optional: Trigger call to hospital if contact number available
-          // Removed as per user request - form is sent directly to reception
+          // Start polling this emergency for public status updates
+          if(result.emergency && result.emergency._id){
+            startPollingPublicEmergency(result.emergency._id);
+          }
           
           // Clear form
           document.getElementById('emergency-patient-name').value = '';
@@ -348,16 +374,48 @@
           document.getElementById('emergency-address').value = '';
           document.getElementById('emergency-hospital').value = '';
         } else {
-          throw new Error('Failed to submit emergency request');
+          const errorResult = await response.json();
+          throw new Error(errorResult.message || 'Failed to submit emergency request');
         }
       } catch (error) {
         document.getElementById('emergency-response').innerHTML = `
-          <div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 10px; border-radius: 4px;">
-            <strong>❌ Error:</strong> ${error.message}
+          <div style="background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 8px;">
+            <h4 style="margin: 0 0 10px 0; color: #721c24;">❌ Submission Failed</h4>
+            <div><strong>Error:</strong> ${error.message}</div>
+            <div style="margin-top: 10px; font-size: 14px; color: #721c24;">
+              Please check your information and try again. If the problem persists, contact the hospital directly.
+            </div>
           </div>
         `;
       }
     }
+
+    // Polling for public emergency status
+    let publicPollTimer = null;
+    function startPollingPublicEmergency(id){
+      stopPollingPublicEmergency();
+      publicPollTimer = setInterval(async () => {
+        try{
+          const res = await api(`/api/emergency/detail/${id}`);
+          if(res && res.success && res.emergency){
+            const e = res.emergency;
+            const container = document.getElementById('emergency-response');
+            const statusBadge = e.status === 'Pending' ? '⏳ Pending' : e.status === 'Accepted' ? '✅ Accepted' : e.status === 'Denied' ? '❌ Rejected' : e.status;
+            container.innerHTML = `
+              <div style="background:#e7f3ff;border:1px solid #b3d7ff;color:#0c5460;padding:10px;border-radius:4px;">
+                <div><strong>Status:</strong> ${statusBadge}</div>
+                ${e.rejectionReason ? `<div><strong>Reason:</strong> ${e.rejectionReason}</div>` : ''}
+                ${(e.alternateHospitals||[]).length ? `<div><strong>Alternate Hospitals:</strong> ${e.alternateHospitals.join(', ')}</div>` : ''}
+              </div>
+            `;
+            if(e.status !== 'Pending'){
+              stopPollingPublicEmergency();
+            }
+          }
+        }catch(err){ /* ignore transient errors */ }
+      }, 5000);
+    }
+    function stopPollingPublicEmergency(){ if(publicPollTimer){ clearInterval(publicPollTimer); publicPollTimer = null; } }
 
     function setupRealTimeListeners() {
       // Listen for bed status updates
