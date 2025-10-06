@@ -7,7 +7,7 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="/js/client.js"></script>
   <script src="/js/navigation.js"></script>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" type="text/javascript"></script>
   <style>
     body { font-family: system-ui, Arial; margin: 20px; }
     label { display:block; margin-top:6px; }
@@ -571,13 +571,17 @@
 
       currentScanType = scanType;
       const container = document.getElementById('qr-scanner-container');
-      const video = document.getElementById('qr-video');
       const result = document.getElementById('qr-result');
 
       try {
         // Show scanner container
         container.style.display = 'block';
         result.style.display = 'none';
+
+        // Check if Html5QrcodeScanner is available
+        if (typeof Html5QrcodeScanner === 'undefined') {
+          throw new Error('QR Scanner library not loaded. Please refresh the page.');
+        }
 
         // Initialize QR scanner
         qrScanner = new Html5QrcodeScanner("qr-scanner-container", {

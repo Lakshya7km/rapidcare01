@@ -24,17 +24,29 @@ module.exports = (io) => {
 
   router.post('/', auth(['hospital']), async (req, res) => {
     try {
+      console.log('Bed creation request:', req.body);
       const { hospitalId, wardNumber, bedType, start, end } = req.body;
+      
+      if (!hospitalId || !wardNumber || !bedType) {
+        return res.status(400).json({ success: false, message: 'Missing required fields: hospitalId, wardNumber, bedType' });
+      }
+      
       if (req.user.role === 'hospital' && req.user.ref !== hospitalId) {
         return res.status(403).json({ success: false, message: 'Forbidden' });
       }
+      
       const created = [];
       const s = parseInt(start);
       const e = parseInt(end);
       
+      console.log(`Creating beds from ${s} to ${e} for hospital ${hospitalId}, ward ${wardNumber}, type ${bedType}`);
+      
       // Ensure QR directory exists
       const qrDir = path.join(__dirname, '..', 'uploads', 'qrs');
-      if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir, { recursive: true });
+      if (!fs.existsSync(qrDir)) {
+        console.log('Creating QR directory:', qrDir);
+        fs.mkdirSync(qrDir, { recursive: true });
+      }
       const base = process.env.BASE_URL || 'http://localhost:5000';
       
       for (let n = s; n <= e; n++) {
@@ -47,12 +59,16 @@ module.exports = (io) => {
         await bed.save();
 
         try {
+          console.log(`Generating QR codes for bed ${bedId}`);
+          
           // Generate QR codes with timeout
           const infoUrl = `${base}/api/beds/scan/${encodeURIComponent(bedId)}`;
           const filePath = path.join(qrDir, `${bedId}.png`);
+          
+          console.log(`Generating info QR: ${infoUrl} -> ${filePath}`);
           await Promise.race([
             QRCode.toFile(filePath, infoUrl),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('QR generation timeout')), 5000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('QR generation timeout')), 10000))
           ]);
           bed.qrCodeUrl = `/uploads/qrs/${bedId}.png`;
 
@@ -62,22 +78,26 @@ module.exports = (io) => {
           const vPath = path.join(qrDir, `${bedId}-vacant.png`);
           const oPath = path.join(qrDir, `${bedId}-occupied.png`);
           
+          console.log(`Generating status QRs: ${vacUrl} -> ${vPath}, ${occUrl} -> ${oPath}`);
+          
           await Promise.all([
             Promise.race([
               QRCode.toFile(vPath, vacUrl),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('QR generation timeout')), 5000))
+              new Promise((_, reject) => setTimeout(() => reject(new Error('QR generation timeout')), 10000))
             ]),
             Promise.race([
               QRCode.toFile(oPath, occUrl),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('QR generation timeout')), 5000))
+              new Promise((_, reject) => setTimeout(() => reject(new Error('QR generation timeout')), 10000))
             ])
           ]);
           
           bed.qrVacantUrl = `/uploads/qrs/${bedId}-vacant.png`;
           bed.qrOccupiedUrl = `/uploads/qrs/${bedId}-occupied.png`;
           await bed.save();
+          
+          console.log(`QR codes generated successfully for bed ${bedId}`);
         } catch (qrError) {
-          console.warn(`QR generation failed for bed ${bedId}:`, qrError.message);
+          console.error(`QR generation failed for bed ${bedId}:`, qrError.message);
           // Continue without QR codes
         }
 
@@ -260,12 +280,16 @@ module.exports = (io) => {
   // Mass QR PDF generation for bed ranges
   router.get('/pdf/mass/:hospitalId', async (req,res) => {
     try{
+      console.log(`PDF generation request for hospital ${req.params.hospitalId}`);
       const { wardNumber, bedType } = req.query;
       let query = { hospitalId: req.params.hospitalId };
       if(wardNumber) query.wardNumber = wardNumber;
       if(bedType) query.bedType = bedType;
       
+      console.log('PDF query:', query);
       const beds = await Bed.find(query).sort({ wardNumber: 1, bedNumber: 1 });
+      console.log(`Found ${beds.length} beds for PDF generation`);
+      
       if(beds.length === 0) return res.status(404).send('No beds found');
       
       res.setHeader('Content-Type','application/pdf');

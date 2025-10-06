@@ -628,16 +628,41 @@
 
     async function createBeds(){
       if(!currentHospitalId) return alert('Join hospital first');
+      
+      const wardNumber = document.getElementById('ward').value.trim();
+      const bedType = document.getElementById('bedType').value;
+      const start = parseInt(document.getElementById('start').value||'1',10);
+      const end = parseInt(document.getElementById('end').value||'1',10);
+      
+      if(!wardNumber) {
+        alert('Please enter ward number');
+        return;
+      }
+      
+      if(start > end) {
+        alert('Start number must be less than or equal to end number');
+        return;
+      }
+      
       const body = {
         hospitalId: currentHospitalId,
-        wardNumber: document.getElementById('ward').value,
-        bedType: document.getElementById('bedType').value,
-        start: parseInt(document.getElementById('start').value||'1',10),
-        end: parseInt(document.getElementById('end').value||'1',10)
+        wardNumber: wardNumber,
+        bedType: bedType,
+        start: start,
+        end: end
       };
-      const res = await api('/api/beds', { method:'POST', body: JSON.stringify(body) });
-      document.getElementById('beds-status').innerText = `Created ${res.created.length} beds`;
-      loadBeds();
+      
+      try {
+        document.getElementById('beds-status').innerText = 'Creating beds...';
+        const res = await api('/api/beds', { method:'POST', body: JSON.stringify(body) });
+        document.getElementById('beds-status').innerText = `✅ Created ${res.created.length} beds successfully`;
+        document.getElementById('beds-status').style.color = 'green';
+        loadBeds();
+      } catch(e) {
+        console.error('Bed creation error:', e);
+        document.getElementById('beds-status').innerText = `❌ Error creating beds: ${e.message}`;
+        document.getElementById('beds-status').style.color = 'red';
+      }
     }
 
     async function loadBeds(){
@@ -724,15 +749,28 @@
 
     function printMassQR() {
       if(!currentHospitalId) return alert('Please login first');
-      window.open(`/api/beds/pdf/mass/${currentHospitalId}`, '_blank');
+      try {
+        const url = `/api/beds/pdf/mass/${currentHospitalId}`;
+        console.log('Opening PDF URL:', url);
+        window.open(url, '_blank');
+      } catch(e) {
+        console.error('PDF generation error:', e);
+        alert('Error opening PDF: ' + e.message);
+      }
     }
 
     function printMassQRByWard() {
       if(!currentHospitalId) return alert('Please login first');
-      const wardNumber = prompt('Enter Ward Number (leave empty for all wards):');
-      let url = `/api/beds/pdf/mass/${currentHospitalId}`;
-      if(wardNumber) url += `?wardNumber=${wardNumber}`;
-      window.open(url, '_blank');
+      try {
+        const wardNumber = prompt('Enter Ward Number (leave empty for all wards):');
+        let url = `/api/beds/pdf/mass/${currentHospitalId}`;
+        if(wardNumber) url += `?wardNumber=${wardNumber}`;
+        console.log('Opening PDF URL:', url);
+        window.open(url, '_blank');
+      } catch(e) {
+        console.error('PDF generation error:', e);
+        alert('Error opening PDF: ' + e.message);
+      }
     }
 
     async function updateBed(bedId){
