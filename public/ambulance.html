@@ -796,13 +796,10 @@
     
     async function markAsHandled(emergencyId){
       try{
-        await api(`/api/emergency/${emergencyId}/status`, {
+        await api(`/api/emergency/${emergencyId}/handled`, {
           method: 'PUT',
           body: JSON.stringify({ 
-            status: 'Handled',
-            handled: true,
-            handledAt: new Date().toISOString(),
-            handledBy: currentAmbulance.ambulanceId
+            handledComment: 'Case completed by ambulance team'
           })
         });
         

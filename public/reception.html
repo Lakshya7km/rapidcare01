@@ -1016,12 +1016,15 @@
         let html = '<table border="1" style="width:100%; border-collapse:collapse; margin-top:10px;"><tr style="background:#f0f0f0;"><th>Doctor</th><th>Date</th><th>Status</th><th>Shift</th><th>Marked By</th></tr>';
         let hasRecords = false;
         for(const doc of list){
-          if(doc.attendance && doc.attendance.length > 0){
-            const recent = doc.attendance.slice(-7); // Last 7 records
+          try {
+            const attendanceList = await api(`/api/doctors/attendance/${doc.doctorId}`);
+            const recent = attendanceList.slice(-7); // Last 7 records
             recent.forEach(att => {
               hasRecords = true;
-              html += `<tr><td>${doc.name || doc.doctorId}</td><td>${new Date(att.date).toLocaleDateString()}</td><td>${att.status}</td><td>${att.shift}</td><td>${att.markedBy || 'N/A'}</td></tr>`;
+              html += `<tr><td>${doc.name || doc.doctorId}</td><td>${new Date(att.date).toLocaleDateString()}</td><td>${att.availability}</td><td>${att.shift}</td><td>${att.markedBy || 'N/A'}</td></tr>`;
             });
+          } catch(e) {
+            console.error(`Error loading attendance for doctor ${doc.doctorId}:`, e);
           }
         }
         html += '</table>';

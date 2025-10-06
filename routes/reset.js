@@ -5,6 +5,7 @@ const Bed = require('../models/Bed');
 const Ambulance = require('../models/Ambulance');
 const Attendance = require('../models/Attendance');
 const EmergencyRequest = require('../models/EmergencyRequest');
+const bcrypt = require('bcrypt');
 // simplified: no hashing in reset
 
 module.exports = (io) => {
@@ -157,7 +158,7 @@ module.exports = (io) => {
           vehicleNumber: 'CG04-1234', 
           emt: { name: 'Ravi Kumar', mobile: '9000000001', emtId: 'EMT01' }, 
           pilot: { name: 'Vikram Singh', mobile: '9000000002', pilotId: 'PIL01' }, 
-          password: await bcrypt.hash('test@1234', 10), 
+          password: 'test@1234', 
           forcePasswordChange: true,
           status: 'On Duty'
         },
@@ -168,7 +169,7 @@ module.exports = (io) => {
           vehicleNumber: 'CG04-5678', 
           emt: { name: 'Suresh Yadav', mobile: '9000000003', emtId: 'EMT02' }, 
           pilot: { name: 'Rajesh Kumar', mobile: '9000000004', pilotId: 'PIL02' }, 
-          password: await bcrypt.hash('test@1234', 10), 
+          password: 'test@1234', 
           forcePasswordChange: true,
           status: 'Offline'
         }
