@@ -1,852 +1,741 @@
 <!doctype html>
-<html>
+<html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ambulance Portal - RapidCare</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="/js/client.js"></script>
-  <script src="/js/navigation.js"></script>
+  <script defer src="/js/client.js"></script>
   <style>
-    body { font-family: system-ui, Arial; margin: 20px; }
-    label { display:block; margin-top:6px; }
-    input, select { width: 100%; padding:6px; }
-    .col { border:1px solid #ddd; border-radius:10px; padding:12px; max-width: 560px; }
-    button { padding:8px 12px; margin-top:8px; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; }
-    
-    /* Dashboard Styles */
-    .dashboard-stats { margin-top: 20px; }
-    .stat-card { 
-      background: #f8f9fa; 
-      border: 1px solid #dee2e6; 
-      border-radius: 8px; 
-      padding: 16px; 
+    /* Dashboard Layout */
+    .dashboard-container {
+      display: flex;
+      min-height: 100vh;
+      background-color: var(--bg-body);
     }
-    .stat-item { 
-      margin-bottom: 8px; 
-      padding: 8px; 
-      background: white; 
-      border-radius: 4px; 
-      border-left: 4px solid #dc3545; 
+
+    .sidebar {
+      width: 280px;
+      background-color: #fff;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: var(--shadow-sm);
     }
-    
-    /* Toast notification animations */
-    @keyframes slideInRight {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
+
+    .sidebar-header {
+      padding: var(--spacing-lg);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
     }
-    @keyframes fadeOut {
-      from { opacity: 1; }
-      to { opacity: 0; }
+
+    .sidebar-nav {
+      padding: var(--spacing-md);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      padding: 0.75rem 1rem;
+      border-radius: var(--border-radius);
+      color: var(--text-muted);
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition-base);
+    }
+
+    .nav-item:hover {
+      background-color: rgba(220, 53, 69, 0.05);
+      color: var(--danger-color);
+      text-decoration: none;
+    }
+
+    .nav-item.active {
+      background-color: rgba(220, 53, 69, 0.1);
+      color: var(--danger-color);
+      font-weight: 600;
+    }
+
+    .main-content {
+      flex: 1;
+      margin-left: 280px;
+      padding: var(--spacing-lg);
+      max-width: 1600px;
+    }
+
+    /* Stats Cards */
+    .stat-card {
+      background: white;
+      padding: var(--spacing-lg);
+      border-radius: var(--border-radius-lg);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition-base);
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .stat-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.75rem;
+    }
+
+    /* Mobile Sidebar Toggle */
+    .menu-toggle {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1000;
+      background: white;
+      border: 1px solid var(--border-color);
+      padding: 0.5rem;
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow-sm);
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .main-content {
+        margin-left: 0;
+        padding: var(--spacing-md);
+      }
+
+      .menu-toggle {
+        display: block;
+      }
     }
   </style>
 </head>
+
 <body>
-  <h2>Ambulance Portal</h2>
-  
-  <div id="login-section" class="col" style="display:none;"></div>
 
-  <div id="ambulance-dashboard" style="display: block;">
-    <div id="navigation-container"></div>
-    <div style="text-align:right; margin:10px;">
-      <button onclick="logoutAmbulance()" style="background:#dc3545; color:white;">Logout</button>
-    </div>
-  </div>
-
-  <!-- Dashboard Section -->
-  <div id="section-dashboard" class="portal-section" style="display: block;">
-    <div class="col">
-      <h3>🚑 Ambulance Dashboard</h3>
-      <div id="ambulance-info" style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
-        <strong>Ambulance:</strong> <span id="amb-info"></span>
+  <!-- Login Section -->
+  <div id="login-section" class="container"
+    style="display: none; min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+    <div class="card glass" style="width: 100%; max-width: 400px; border-top: 4px solid var(--danger-color);">
+      <div class="card-header text-center border-0 pb-0">
+        <img src="/images/ambulance.png" alt="Ambulance" style="width: 64px; height: 64px; margin-bottom: 1rem;">
+        <h3 class="text-danger">Ambulance Portal</h3>
+        <p class="text-muted">Please login to access your dashboard</p>
       </div>
-      
-      <!-- Hospital Details in Dashboard -->
-      <div id="dashboard-hospital-details" style="background: #e3f2fd; padding: 15px; margin-bottom: 20px; border-radius: 8px; border-left: 4px solid #2196f3;">
-        <h4>🏥 Hospital Information</h4>
-        <div id="dashboard-hospital-info-content">Loading hospital details...</div>
+      <div class="form-group">
+        <label class="form-label">Ambulance ID</label>
+        <input id="amb-login-user" class="form-control" placeholder="e.g., AMB001" />
       </div>
-      
-      <p>Welcome to the Ambulance Portal. Use the navigation above to manage your profile and emergency requests.</p>
-      <div class="dashboard-stats">
-        <div class="stat-card">
-          <h4>Quick Stats</h4>
-          <div id="ambulance-quick-stats">Loading...</div>
-        </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input id="amb-login-pass" type="password" class="form-control" placeholder="••••••••" />
+      </div>
+      <button onclick="loginAmbulanceHere()" class="btn btn-danger btn-block">Login</button>
+      <div id="login-msg" class="alert alert-danger mt-3" style="display:none;"></div>
+      <div class="text-center mt-3">
+        <a href="/" class="text-sm text-muted">Back to Home</a>
       </div>
     </div>
   </div>
 
-  <!-- Profile Section -->
-  <div id="section-profile" class="portal-section" style="display: none;">
-    <div class="col">
-      <h3>Ambulance Profile</h3>
-      <div id="ambulance-info-profile" style="background: #f8f9fa; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
-        <strong>Ambulance:</strong> <span id="amb-info-profile"></span>
-      </div>
-      <div class="row">
-        <div class="col">
-          <h4>EMT Information</h4>
-          <label>EMT Name</label><input id="emt-name" readonly />
-          <label>EMT ID</label><input id="emt-id" readonly />
-          <label>EMT Mobile</label><input id="emt-mobile" readonly />
-        </div>
-        <div class="col">
-          <h4>Pilot Information</h4>
-          <label>Pilot Name</label><input id="pilot-name" readonly />
-          <label>Pilot ID</label><input id="pilot-id" readonly />
-          <label>Pilot Mobile</label><input id="pilot-mobile" readonly />
-        </div>
-      </div>
-      <div class="row">
-        <div class="col">
-          <label>Ambulance Number</label><input id="amb-number" readonly />
-          <label>Vehicle Number</label><input id="veh-number" readonly />
-          <label>Status</label><input id="amb-status" readonly />
-        </div>
-      </div>
-      <div style="margin-top:20px; background:#f8f9fa; border-radius:5px; padding:10px;">
-        <h4>Change Password</h4>
-        <div id="hospital-verify-section" style="display:none; margin-bottom:10px; padding:10px; background:#fff3cd; border-radius:5px;">
-          <p><strong>⚠️ Hospital ID Verification Required</strong></p>
-          <p>Please enter your hospital ID to verify your affiliation before changing password.</p>
-          <label>Hospital ID</label><input id="verify-hospital-id" type="text" />
-          <button onclick="verifyHospitalId()">Verify</button>
-          <div id="verify-msg" style="margin-top:6px;"></div>
-        </div>
-        <form onsubmit="event.preventDefault();changePasswordAmbulance();" id="password-change-form" style="display:none;">
-          <label>New Password</label><input id="new-password" type="password" />
-          <button type="submit">Change Password</button>
-          <div id="change-pass-msg" style="margin-top:6px;"></div>
-        </form>
-      </div>
-    </div>
-  </div>
+  <!-- Dashboard Layout -->
+  <div id="dashboard-layout" class="dashboard-container" style="display: none;">
 
-  <!-- Emergency Form Section -->
-  <div id="section-emergency-form" class="portal-section" style="display: block;">
-    <div class="col">
-      <h3>🚨 Emergency Request Form</h3>
-      <div id="request-status" style="display:none; padding:10px; margin:10px 0; border-radius:4px; text-align:center;"></div>
-      
-      <!-- Ambulance Info Display -->
-      <div id="ambulance-info-form" style="background: #e7f3ff; border: 2px solid #007bff; padding: 15px; margin-bottom: 15px; border-radius: 8px;">
-        <h4 style="margin: 0 0 10px 0; color: #007bff;">🚑 Ambulance Details</h4>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
-          <div><strong>Ambulance:</strong> <span id="amb-info-form"></span></div>
-          <div><strong>Status:</strong> <span style="color: #28a745; font-weight: bold;">On Duty</span></div>
-        </div>
-      </div>
-      
-      <!-- Patient Information -->
-      <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin-bottom: 15px; border-radius: 8px;">
-        <h4 style="margin: 0 0 15px 0; color: #856404;">👤 Patient Information</h4>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-          <div>
-            <label><strong>Patient Name *</strong></label>
-            <input id="p-name" placeholder="Enter patient's full name" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-          </div>
-          <div>
-            <label><strong>Age *</strong></label>
-            <input id="p-age" type="number" min="0" max="120" placeholder="Age in years" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-          </div>
-          <div>
-            <label><strong>Gender *</strong></label>
-            <select id="p-gender" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-              <option value="">Select Gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div>
-            <label><strong>Mobile Number *</strong></label>
-            <input id="p-mobile" type="tel" placeholder="Patient/Guardian mobile" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-          </div>
-        </div>
-        <div style="margin-top: 15px;">
-          <label><strong>Address *</strong></label>
-          <input id="p-addr" placeholder="Patient's current address" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-        </div>
-      </div>
-      
-      <!-- Medical Information -->
-      <div style="background: #f8d7da; border: 1px solid #dc3545; padding: 15px; margin-bottom: 15px; border-radius: 8px;">
-        <h4 style="margin: 0 0 15px 0; color: #721c24;">🏥 Medical Emergency Details</h4>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-          <div>
-            <label><strong>Emergency Type *</strong></label>
-            <select id="p-type" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-              <option value="">Select Emergency Type</option>
-              <option value="ICU">ICU (Critical Care)</option>
-              <option value="General">General Emergency</option>
-              <option value="Cardiac">Cardiac Emergency</option>
-              <option value="Trauma">Trauma/Accident</option>
-              <option value="Respiratory">Respiratory Emergency</option>
-              <option value="Neurological">Neurological Emergency</option>
-              <option value="Maternity">Maternity Emergency</option>
-            </select>
-          </div>
-          <div>
-            <label><strong>Ready Equipment</strong></label>
-            <select id="p-equipment" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-              <option value="">Select Equipment</option>
-              <option value="Wheelchair">Wheelchair</option>
-              <option value="Stretcher">Stretcher</option>
-              <option value="Oxygen">Oxygen Support</option>
-              <option value="Defibrillator">Defibrillator</option>
-              <option value="IV Fluids">IV Fluids</option>
-              <option value="Ventilator">Ventilator</option>
-              <option value="None">None</option>
-            </select>
-          </div>
-        </div>
-        <div style="margin-top: 15px;">
-          <label><strong>Symptoms *</strong></label>
-          <textarea id="p-symptoms" rows="3" placeholder="Describe patient's current symptoms and condition..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
-        </div>
-        <div style="margin-top: 15px;">
-          <label><strong>Reason for Emergency *</strong></label>
-          <textarea id="p-reason" rows="2" placeholder="Brief reason for emergency (accident, illness, etc.)" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
-        </div>
-      </div>
-      
-      <!-- Submit Section -->
-      <div style="text-align: center; margin-top: 20px;">
-        <button onclick="submitEmergency()" style="background: #dc3545; color: white; padding: 15px 30px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 8px rgba(220,53,69,0.3); transition: all 0.3s;">
-          🚨 Submit Emergency Request
-        </button>
-        <p style="font-size: 12px; color: #666; margin-top: 10px;">
-          * Required fields | This will be sent immediately to hospital reception
-        </p>
-      </div>
-      
-      <!-- Response Area -->
-      <div id="resp" style="margin-top: 20px;"></div>
-    </div>
-  </div>
+    <!-- Mobile Toggle -->
+    <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
 
-  <!-- Emergency Status Section -->
-  <div id="section-emergency-status" class="portal-section" style="display: none;">
-    <div class="col">
-      <h3>🚨 Live Emergency Requests</h3>
-      <div style="margin-bottom: 15px;">
-        <button onclick="loadLiveRequests()" style="background: #17a2b8; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">🔄 Refresh Requests</button>
-      </div>
-      
-      <div id="live-requests-container" style="background: #f8f9fa; padding: 15px; border-radius: 5px; min-height: 300px;">
-        <p>Loading emergency requests...</p>
-      </div>
-      
-      <div style="margin-top: 20px;">
-        <h4>📡 Real-time Status Updates</h4>
-        <div id="emergency-status-updates" style="background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd; min-height: 150px;">
-          <p style="color: #666; font-style: italic;">Real-time updates from reception will appear here...</p>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <img src="/images/logo.png" alt="Logo" style="height: 32px;">
+        <div>
+          <h3 class="text-primary mb-0" style="font-size: 1.2rem;">RapidCare</h3>
+          <small class="text-muted">Ambulance Panel</small>
         </div>
       </div>
-    </div>
+      <nav class="sidebar-nav">
+        <a class="nav-item active" onclick="showSection('dashboard')">
+          <span>📊</span> Dashboard
+        </a>
+        <a class="nav-item" onclick="showSection('emergency-form')">
+          <span>🚨</span> New Request
+        </a>
+        <a class="nav-item" onclick="showSection('emergency-status')">
+          <span>📡</span> Live Status
+        </a>
+        <a class="nav-item" onclick="showSection('profile')">
+          <span>🚑</span> Profile
+        </a>
+        <div style="margin-top: auto; border-top: 1px solid var(--border-color); padding-top: var(--spacing-md);">
+          <a class="nav-item text-danger" onclick="logout()">
+            <span>🚪</span> Logout
+          </a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- Dashboard Overview -->
+      <div id="section-dashboard" class="portal-section animate-fade-in">
+        <h2 class="mb-3">Welcome, <span id="dash-name"></span></h2>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-3 grid-auto-fit gap-md mb-4">
+          <div class="stat-card">
+            <div class="stat-icon" style="background: #e7f1ff; color: #0b6efd;">🏥</div>
+            <div>
+              <div class="text-muted text-sm">Hospital</div>
+              <h4 class="mb-0" id="dash-hospital">Loading...</h4>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: #d1e7dd; color: #0f5132;">✅</div>
+            <div>
+              <div class="text-muted text-sm">Status</div>
+              <h4 class="mb-0" id="dash-status">Loading...</h4>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: #fff3cd; color: #856404;">🚑</div>
+            <div>
+              <div class="text-muted text-sm">Vehicle</div>
+              <h4 class="mb-0" id="dash-vehicle">Loading...</h4>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-md">
+          <!-- Quick Actions -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="mb-0">⚡ Quick Actions</h3>
+            </div>
+            <div class="flex gap-md flex-wrap">
+              <button onclick="showSection('emergency-form')" class="btn btn-danger flex-1" style="padding: 1.5rem;">
+                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🚨</div>
+                Create Emergency Request
+              </button>
+              <button onclick="showSection('emergency-status')" class="btn btn-primary flex-1" style="padding: 1.5rem;">
+                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📡</div>
+                View Live Requests
+              </button>
+            </div>
+          </div>
+
+          <!-- Crew Info -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="mb-0">👨‍✈️ Crew Information</h3>
+            </div>
+            <div class="text-sm">
+              <div class="flex justify-between border-bottom py-3"
+                style="border-bottom: 1px solid var(--border-color);">
+                <strong>EMT</strong>
+                <span id="dash-emt" class="text-muted">Loading...</span>
+              </div>
+              <div class="flex justify-between py-3">
+                <strong>Pilot</strong>
+                <span id="dash-pilot" class="text-muted">Loading...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Emergency Request Form -->
+      <div id="section-emergency-form" class="portal-section animate-fade-in" style="display: none;">
+        <div class="card border-danger"
+          style="border-left: 4px solid var(--danger-color); max-width: 800px; margin: 0 auto;">
+          <div class="card-header bg-light">
+            <h3 class="mb-0 text-danger">🚨 New Emergency Request</h3>
+            <p class="text-muted mb-0 text-sm">Submit patient details to alert the hospital reception immediately.</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-md mt-3">
+            <!-- Patient Info -->
+            <div class="form-group">
+              <label class="form-label">Patient Name *</label>
+              <input id="p-name" class="form-control" placeholder="Full Name" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Age *</label>
+              <input id="p-age" type="number" class="form-control" placeholder="Years" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Gender *</label>
+              <select id="p-gender" class="form-control">
+                <option value="">Select Gender</option>
+                <option>Male</option>
+                <option>Female</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mobile Number *</label>
+              <input id="p-mobile" type="tel" class="form-control" placeholder="Contact Number" />
+            </div>
+            <div class="form-group" style="grid-column: 1/-1;">
+              <label class="form-label">Address *</label>
+              <input id="p-addr" class="form-control" placeholder="Current Location / Address" />
+            </div>
+
+            <!-- Medical Info -->
+            <div class="form-group">
+              <label class="form-label">Emergency Type *</label>
+              <select id="p-type" class="form-control">
+                <option value="">Select Type</option>
+                <option>ICU</option>
+                <option>General</option>
+                <option>Cardiac</option>
+                <option>Trauma</option>
+                <option>Respiratory</option>
+                <option>Neurological</option>
+                <option>Maternity</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Required Equipment</label>
+              <select id="p-equipment" class="form-control">
+                <option value="">Select Equipment</option>
+                <option>Wheelchair</option>
+                <option>Stretcher</option>
+                <option>Oxygen</option>
+                <option>Defibrillator</option>
+                <option>Ventilator</option>
+                <option>None</option>
+              </select>
+            </div>
+            <div class="form-group" style="grid-column: 1/-1;">
+              <label class="form-label">Symptoms *</label>
+              <textarea id="p-symptoms" class="form-control" rows="2" placeholder="Describe symptoms..."></textarea>
+            </div>
+            <div class="form-group" style="grid-column: 1/-1;">
+              <label class="form-label">Reason for Emergency *</label>
+              <textarea id="p-reason" class="form-control" rows="2" placeholder="Accident, Illness, etc..."></textarea>
+            </div>
+          </div>
+
+          <button onclick="submitEmergency()" class="btn btn-danger btn-block mt-3 py-3">
+            🚀 Send Emergency Alert
+          </button>
+          <div id="request-status" class="mt-3"></div>
+        </div>
+      </div>
+
+      <!-- Live Status Section -->
+      <div id="section-emergency-status" class="portal-section animate-fade-in" style="display: none;">
+        <div class="flex justify-between items-center mb-3">
+          <h2>📡 Live Requests</h2>
+          <button onclick="loadLiveRequests()" class="btn btn-outline btn-sm">🔄 Refresh</button>
+        </div>
+
+        <div id="live-requests-container" class="grid grid-cols-1 gap-md">
+          <div class="text-center text-muted p-4">Loading requests...</div>
+        </div>
+
+        <div class="card mt-4 bg-light border-0">
+          <div class="card-header bg-transparent">
+            <h4 class="mb-0 text-muted">Real-time Updates Log</h4>
+          </div>
+          <div id="emergency-status-updates" class="text-sm text-muted" style="max-height: 150px; overflow-y: auto;">
+            <div class="p-2 text-center">Waiting for updates...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile Section -->
+      <div id="section-profile" class="portal-section animate-fade-in" style="display: none;">
+        <div class="grid grid-cols-1 gap-md" style="max-width: 800px;">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="mb-0">Ambulance Profile</h3>
+            </div>
+            <div class="grid grid-cols-2 gap-md">
+              <div class="form-group"><label class="form-label">Ambulance ID</label><input id="amb-id"
+                  class="form-control" disabled /></div>
+              <div class="form-group"><label class="form-label">Vehicle Number</label><input id="veh-number"
+                  class="form-control" disabled /></div>
+              <div class="form-group"><label class="form-label">Status</label><input id="amb-status"
+                  class="form-control" disabled /></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3 class="mb-0">Crew Details</h3>
+            </div>
+            <div class="grid grid-cols-2 gap-md">
+              <div>
+                <h4 class="text-primary mb-3">EMT</h4>
+                <div class="form-group"><label class="form-label">Name</label><input id="emt-name" class="form-control"
+                    disabled /></div>
+                <div class="form-group"><label class="form-label">ID</label><input id="emt-id" class="form-control"
+                    disabled /></div>
+                <div class="form-group"><label class="form-label">Mobile</label><input id="emt-mobile"
+                    class="form-control" disabled /></div>
+              </div>
+              <div>
+                <h4 class="text-primary mb-3">Pilot</h4>
+                <div class="form-group"><label class="form-label">Name</label><input id="pilot-name"
+                    class="form-control" disabled /></div>
+                <div class="form-group"><label class="form-label">ID</label><input id="pilot-id" class="form-control"
+                    disabled /></div>
+                <div class="form-group"><label class="form-label">Mobile</label><input id="pilot-mobile"
+                    class="form-control" disabled /></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Change Password -->
+          <div class="card border-danger" style="border-left: 4px solid var(--danger-color);">
+            <div class="card-header">
+              <h3 class="mb-0 text-danger">Security Settings</h3>
+            </div>
+
+            <div id="hospital-verify-section" style="display:none;" class="alert alert-warning mb-3">
+              <strong>⚠️ Verification Required</strong>
+              <p class="text-sm mb-2">Enter Hospital ID to verify before changing password.</p>
+              <div class="flex gap-sm">
+                <input id="verify-hospital-id" class="form-control" placeholder="Hospital ID" />
+                <button onclick="verifyHospitalId()" class="btn btn-sm btn-warning">Verify</button>
+              </div>
+              <div id="verify-msg" class="mt-1 text-sm"></div>
+            </div>
+
+            <div id="password-change-form" style="display:none;">
+              <div class="flex gap-md items-end">
+                <div class="form-group flex-1 mb-0">
+                  <label class="form-label">New Password</label>
+                  <input id="new-password" type="password" class="form-control" placeholder="Min 6 characters" />
+                </div>
+                <button onclick="changePasswordAmbulance()" class="btn btn-outline">Change Password</button>
+              </div>
+              <div id="change-pass-msg" class="mt-2"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
   </div>
 
   <script>
     let currentAmbulance = null;
     let currentHospitalId = null;
 
-    document.addEventListener('DOMContentLoaded', function() {
-      try{
-        // 🚑 AUTO-LOGIN FIX: If jwt, ambulance object, and role=ambulance exist, go straight to dashboard
-        const role = localStorage.getItem('role');
-        const stored = JSON.parse(localStorage.getItem('ambulance')||'null');
-        const token = localStorage.getItem('jwt');
-        console.log('Ambulance Portal - Role:', role, 'Stored:', stored, 'JWT:', token);
-        if(role==='ambulance' && stored && Object.keys(stored).length > 0 && token){
-          currentAmbulance = stored;
-          currentHospitalId = stored.hospitalId;
-          document.getElementById('login-section').style.display = 'none';
-          document.getElementById('ambulance-dashboard').style.display = 'block';
-          initializeNavigation();
-          document.getElementById('amb-info').innerText = `${stored.ambulanceId} - ${stored.ambulanceNumber}`;
-          document.getElementById('amb-info-profile').innerText = `${stored.ambulanceId} - ${stored.ambulanceNumber}`;
-          document.getElementById('amb-info-form').innerText = `${stored.ambulanceId} - ${stored.ambulanceNumber}`;
-          loadProfile();
-          joinHospitalRoom(currentHospitalId);
-          
-          // Mark ambulance as On Duty when logged in
-          updateAmbulanceStatus('On Duty');
-          
-          // Load live requests
-          loadLiveRequests();
-          
-          showSection('emergency-form'); // Always show Emergency Form after login
-          
-          // Setup real-time emergency updates
-          window.socket.on('emergency:update', (em)=>{
-            if(em.hospitalId === currentHospitalId && em.ambulanceId === currentAmbulance.ambulanceId){
-              const statusUpdate = `🏥 Hospital Response: ${em.status}. ${em.rejectionReason ? 'Reason: ' + em.rejectionReason : ''} ${(em.alternateHospitals||[]).length > 0 ? 'Alternate Hospitals: ' + em.alternateHospitals.join(', ') : ''}`;
-              
-              // Update the response in emergency form
-              document.getElementById('resp').innerHTML = `
-                <div style="background: #e7f3ff; border: 1px solid #b3d7ff; padding: 10px; border-radius: 4px; margin-top: 10px;">
-                  ${statusUpdate}
-                </div>
-              `;
-              
-              // Add to real-time updates
-              const statusDiv = document.getElementById('emergency-status-updates');
-              const updateDiv = document.createElement('div');
-              updateDiv.style.cssText = 'border: 1px solid #17a2b8; background: #d1ecf1; color: #0c5460; padding: 8px; margin-bottom: 6px; border-radius: 4px;';
-              updateDiv.innerHTML = `
-                <strong>📡 ${new Date().toLocaleString()}</strong><br>
-                ${statusUpdate}
-              `;
-              statusDiv.prepend(updateDiv);
-              
-              // Refresh live requests to show updated status
-              loadLiveRequests();
-            }
-          });
-          // Check if password change is required
-          if(stored.forcePasswordChange){
-            alert('You must verify your hospital ID and change your password before continuing.');
-            showSection('profile');
-            document.getElementById('hospital-verify-section').style.display = 'block';
-            document.getElementById('password-change-form').style.display = 'none';
-          } else {
-            showSection('dashboard');
-          }
-        }
-      }catch(e){}
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', function () {
+      const role = localStorage.getItem('role');
+      const stored = JSON.parse(localStorage.getItem('ambulance') || 'null');
+      const token = localStorage.getItem('jwt');
+
+      if (role === 'ambulance' && stored && token) {
+        loginSuccess(stored);
+      } else {
+        document.getElementById('login-section').style.display = 'flex';
+      }
     });
 
-    let currentEmergencyId = null;
-    let emergencyCheckInterval = null;
-
-    function showStatus(message, isError = false) {
-      const statusEl = document.getElementById('request-status');
-      statusEl.style.display = 'block';
-      statusEl.style.backgroundColor = isError ? '#f8d7da' : '#d4edda';
-      statusEl.style.color = isError ? '#721c24' : '#155724';
-      statusEl.style.border = `1px solid ${isError ? '#f5c6cb' : '#c3e6cb'}`;
-      statusEl.innerHTML = message;
-      statusEl.scrollIntoView({ behavior: 'smooth' });
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
     }
 
-    function startTrackingEmergency(emergencyId) {
-      currentEmergencyId = emergencyId;
-      if (emergencyCheckInterval) clearInterval(emergencyCheckInterval);
-      emergencyCheckInterval = setInterval(checkEmergencyStatus, 5000);
+    function logout() {
+      localStorage.clear();
+      window.location.reload();
     }
 
-    async function checkEmergencyStatus() {
-      if (!currentEmergencyId) return;
-      
+    async function loginAmbulanceHere() {
+      const username = document.getElementById('amb-login-user').value.trim();
+      const password = document.getElementById('amb-login-pass').value;
+      if (!username || !password) return alert('Enter ID and Password');
+
       try {
-        const response = await api(`/api/emergency/id/${currentEmergencyId}`);
-        const { status, rejectionReason, alternateHospitals } = response;
-        
-        let statusMessage = `Status: <strong>${status}</strong>`;
-        if (status === 'Accepted') {
-          statusMessage += ' - Your request has been accepted by the hospital.';
-          clearInterval(emergencyCheckInterval);
-        } else if (status === 'Rejected') {
-          statusMessage += ` - Request rejected. Reason: ${rejectionReason || 'Not specified'}`;
-          if (alternateHospitals?.length > 0) {
-            statusMessage += `<br>Suggested alternatives: ${alternateHospitals.join(', ')}`;
-          }
-          clearInterval(emergencyCheckInterval);
-        } else if (status === 'Transferred') {
-          statusMessage += ` - Request transferred to another hospital.`;
-          if (alternateHospitals?.length > 0) {
-            statusMessage += `<br>Transfer to: ${alternateHospitals[0]}`;
-          }
-          clearInterval(emergencyCheckInterval);
-        }
-        
-        showStatus(statusMessage);
+        const res = await login('ambulance', username, password);
+        localStorage.setItem('role', 'ambulance');
+        localStorage.setItem('ambulance', JSON.stringify(res.ambulance));
+        loginSuccess(res.ambulance);
       } catch (e) {
-        console.error('Error checking status:', e);
+        const msg = document.getElementById('login-msg');
+        msg.innerText = 'Login failed: ' + e.message;
+        msg.style.display = 'block';
       }
     }
 
-    async function submitEmergency(){
-      if(!currentAmbulance || !currentHospitalId) {
-        showStatus('Error: Please login first', true);
-        return;
+    function loginSuccess(ambulance) {
+      currentAmbulance = ambulance;
+      currentHospitalId = ambulance.hospitalId;
+
+      document.getElementById('login-section').style.display = 'none';
+      document.getElementById('dashboard-layout').style.display = 'flex';
+
+      // Setup
+      document.getElementById('dash-name').innerText = ambulance.ambulanceId;
+      joinHospitalRoom(currentHospitalId);
+      setupSocketListeners();
+      updateAmbulanceStatus('On Duty');
+
+      // Initial Data
+      loadDashboardStats();
+      loadProfile();
+
+      if (ambulance.forcePasswordChange) {
+        alert('Please verify hospital ID and change password.');
+        showSection('profile');
+        document.getElementById('hospital-verify-section').style.display = 'block';
+      } else {
+        document.getElementById('password-change-form').style.display = 'block';
+        showSection('dashboard');
       }
-      
-      // Basic validation
-      const requiredFields = ['p-name', 'p-age', 'p-gender', 'p-symptoms', 'p-type', 'p-mobile', 'p-addr'];
-      for (const fieldId of requiredFields) {
-        if (!document.getElementById(fieldId).value.trim()) {
-          showStatus(`Error: Please fill in all required fields`, true);
-          return;
-        }
+    }
+
+    function showSection(name) {
+      document.querySelectorAll('.portal-section').forEach(el => el.style.display = 'none');
+      document.getElementById('section-' + name).style.display = 'block';
+
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      // Highlight active nav logic if needed
+
+      if (name === 'dashboard') loadDashboardStats();
+      if (name === 'emergency-status') loadLiveRequests();
+    }
+
+    // --- Dashboard ---
+    async function loadDashboardStats() {
+      if (!currentAmbulance) return;
+      try {
+        const h = await api(`/api/hospital/${currentHospitalId}`);
+        document.getElementById('dash-hospital').innerText = h.name || currentHospitalId;
+        document.getElementById('dash-status').innerText = currentAmbulance.status || 'Offline';
+        document.getElementById('dash-vehicle').innerText = currentAmbulance.vehicleNumber;
+        document.getElementById('dash-emt').innerText = `${currentAmbulance.emt?.name} (${currentAmbulance.emt?.mobile})`;
+        document.getElementById('dash-pilot').innerText = `${currentAmbulance.pilot?.name} (${currentAmbulance.pilot?.mobile})`;
+      } catch (e) { }
+    }
+
+    // --- Profile ---
+    function loadProfile() {
+      if (!currentAmbulance) return;
+      const a = currentAmbulance;
+      document.getElementById('amb-id').value = a.ambulanceId;
+      document.getElementById('veh-number').value = a.vehicleNumber;
+      document.getElementById('amb-status').value = a.status;
+
+      document.getElementById('emt-name').value = a.emt?.name || '';
+      document.getElementById('emt-id').value = a.emt?.emtId || '';
+      document.getElementById('emt-mobile').value = a.emt?.mobile || '';
+
+      document.getElementById('pilot-name').value = a.pilot?.name || '';
+      document.getElementById('pilot-id').value = a.pilot?.pilotId || '';
+      document.getElementById('pilot-mobile').value = a.pilot?.mobile || '';
+    }
+
+    async function verifyHospitalId() {
+      const inputId = document.getElementById('verify-hospital-id').value.trim();
+      if (inputId === currentHospitalId) {
+        document.getElementById('verify-msg').innerHTML = '<span class="text-success">Verified!</span>';
+        document.getElementById('hospital-verify-section').style.display = 'none';
+        document.getElementById('password-change-form').style.display = 'block';
+      } else {
+        document.getElementById('verify-msg').innerHTML = '<span class="text-danger">Incorrect ID</span>';
       }
-      
+    }
+
+    async function changePasswordAmbulance() {
+      const newPass = document.getElementById('new-password').value;
+      if (newPass.length < 6) return alert('Password too short');
+      try {
+        await changePassword('ambulance', currentAmbulance.ambulanceId, newPass);
+        currentAmbulance.forcePasswordChange = false;
+        localStorage.setItem('ambulance', JSON.stringify(currentAmbulance));
+        document.getElementById('change-pass-msg').innerHTML = '<div class="alert alert-success">Password changed!</div>';
+        document.getElementById('new-password').value = '';
+      } catch (e) {
+        document.getElementById('change-pass-msg').innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+      }
+    }
+
+    // --- Emergency Request ---
+    async function submitEmergency() {
+      const required = ['p-name', 'p-age', 'p-gender', 'p-mobile', 'p-addr', 'p-type', 'p-symptoms', 'p-reason'];
+      for (const id of required) {
+        if (!document.getElementById(id).value.trim()) return alert('Please fill all required fields');
+      }
+
       const payload = {
         hospitalId: currentHospitalId,
         ambulanceId: currentAmbulance.ambulanceId,
         patient: {
-          name: document.getElementById('p-name').value.trim(),
-          age: parseInt(document.getElementById('p-age').value, 10),
+          name: document.getElementById('p-name').value,
+          age: document.getElementById('p-age').value,
           gender: document.getElementById('p-gender').value,
-          symptoms: document.getElementById('p-symptoms').value.trim(),
+          contactMobile: document.getElementById('p-mobile').value,
+          contactAddress: document.getElementById('p-addr').value,
           emergencyType: document.getElementById('p-type').value,
-          contactMobile: document.getElementById('p-mobile').value.trim(),
-          contactAddress: document.getElementById('p-addr').value.trim()
+          symptoms: document.getElementById('p-symptoms').value
         },
-        readyEquipment: document.getElementById('p-equipment').value.trim(),
-        reason: document.getElementById('p-reason').value.trim(),
-        emtRef: {
-          name: currentAmbulance.emt.name,
-          emtId: currentAmbulance.emt.emtId,
-          mobile: currentAmbulance.emt.mobile
-        },
-        pilotRef: {
-          name: currentAmbulance.pilot.name,
-          pilotId: currentAmbulance.pilot.pilotId,
-          mobile: currentAmbulance.pilot.mobile
-        },
+        readyEquipment: document.getElementById('p-equipment').value,
+        reason: document.getElementById('p-reason').value,
+        emtRef: currentAmbulance.emt,
+        pilotRef: currentAmbulance.pilot,
         status: 'Pending',
         submittedBy: 'ambulance',
         timestamp: new Date().toISOString()
       };
-      
+
       try {
-        showStatus('🚑 Submitting emergency request...', false);
-        
-        const response = await api('/api/emergency', { 
-          method: 'POST', 
-          body: JSON.stringify(payload) 
-        });
-        
-        console.log('Emergency submission response:', response);
-        
-        if (response.success && response.emergency) {
-          // Show detailed success message
-          showStatus(`
-            <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 8px; color: #155724;">
-              <h4 style="margin: 0 0 10px 0; color: #155724;">✅ Emergency Request Submitted Successfully!</h4>
-              <div style="display: grid; gap: 8px;">
-                <div><strong>📋 Request ID:</strong> ${response.emergency._id}</div>
-                <div><strong>👤 Patient:</strong> ${response.emergency.patient.name} (${response.emergency.patient.age}Y, ${response.emergency.patient.gender})</div>
-                <div><strong>🏥 Sent to Hospital:</strong> ${currentHospitalId}</div>
-                <div><strong>🚑 Ambulance:</strong> ${currentAmbulance.ambulanceNumber}</div>
-                <div><strong>👨‍⚕️ EMT:</strong> ${currentAmbulance.emt.name}</div>
-                <div><strong>🚗 Pilot:</strong> ${currentAmbulance.pilot.name}</div>
-                <div><strong>⏳ Status:</strong> <span style="background: #ffc107; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 12px;">PENDING</span></div>
-                <div style="margin-top: 10px; padding: 8px; background: #fff3cd; border-radius: 4px; color: #856404;">
-                  <strong>📡 Waiting for reception response...</strong><br>
-                  You will receive real-time updates when the hospital responds.
-                </div>
-              </div>
-            </div>
-          `);
-          
-          // Start tracking this emergency
-          startTrackingEmergency(response.emergency._id);
-          
-          // Load live requests to show the new submission
-          setTimeout(() => loadLiveRequests(), 1000);
-          
-          // Clear form after successful submission
-          clearEmergencyForm();
-          
-          // Show success toast notification
-          showToastNotification('✅ Emergency request sent to hospital!', 'success');
-          
-        } else {
-          showStatus('❌ Failed to submit emergency request. Please try again.', true);
-        }
-        
-      } catch(e) {
-        console.error('Emergency submission error:', e);
-        showStatus(`
-          <div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 8px; color: #721c24;">
-            <h4 style="margin: 0 0 10px 0; color: #721c24;">❌ Submission Failed</h4>
-            <div><strong>Error:</strong> ${e.message || 'Failed to submit emergency request'}</div>
-            <div style="margin-top: 10px; font-size: 12px;">Please check your connection and try again.</div>
-          </div>
-        `, true);
-      }
-    }
+        document.getElementById('request-status').innerHTML = '<div class="alert alert-info">Submitting...</div>';
+        const res = await api('/api/emergency', { method: 'POST', body: JSON.stringify(payload) });
 
-    function initializeNavigation() {
-      // Add navigation styles
-      Navigation.addStyles();
-      
-      // Create navigation
-      const nav = new Navigation('ambulance', { ambulance: currentAmbulance });
-      document.getElementById('navigation-container').innerHTML = nav.render();
-    }
-
-    function showSection(sectionName) {
-      // Hide all sections
-      const sections = document.querySelectorAll('.portal-section');
-      sections.forEach(section => section.style.display = 'none');
-      
-      // Remove active class from all nav items
-      const navItems = document.querySelectorAll('.nav-item');
-      navItems.forEach(item => item.classList.remove('active'));
-      
-      // Show selected section
-      const targetSection = document.getElementById('section-' + sectionName);
-      if (targetSection) {
-        targetSection.style.display = 'block';
-      }
-      
-      // Add active class to clicked nav item
-      const activeNavItem = document.querySelector(`[data-section="${sectionName}"]`);
-      if (activeNavItem) {
-        activeNavItem.classList.add('active');
-      }
-      
-      // Call section-specific load functions
-      if (sectionName === 'dashboard') {
-        loadDashboard();
-      } else if (sectionName === 'profile') {
-        loadProfile();
-      } else if (sectionName === 'emergency-status') {
-        loadLiveRequests();
-      }
-    }
-
-    function loadProfile() {
-      if (!currentAmbulance) return;
-      
-      // Fill EMT information
-      document.getElementById('emt-name').value = currentAmbulance.emt?.name || '';
-      document.getElementById('emt-id').value = currentAmbulance.emt?.emtId || '';
-      document.getElementById('emt-mobile').value = currentAmbulance.emt?.mobile || '';
-      
-      // Fill Pilot information
-      document.getElementById('pilot-name').value = currentAmbulance.pilot?.name || '';
-      document.getElementById('pilot-id').value = currentAmbulance.pilot?.pilotId || '';
-      document.getElementById('pilot-mobile').value = currentAmbulance.pilot?.mobile || '';
-      
-      // Fill ambulance information
-      document.getElementById('amb-number').value = currentAmbulance.ambulanceNumber || '';
-      document.getElementById('veh-number').value = currentAmbulance.vehicleNumber || '';
-      document.getElementById('amb-status').value = currentAmbulance.status || 'Offline';
-    }
-
-    async function loadDashboard() {
-      if (!currentAmbulance) return;
-      
-      // Load hospital details for dashboard
-      await loadDashboardHospitalDetails();
-      
-      try {
-        document.getElementById('ambulance-quick-stats').innerHTML = `
-          <div class="stat-item">
-            <strong>🚑 Status:</strong> ${currentAmbulance.status || 'Offline'}
-          </div>
-          <div class="stat-item">
-            <strong>👨‍⚕️ EMT:</strong> ${currentAmbulance.emt?.name || 'N/A'} (${currentAmbulance.emt?.mobile || 'N/A'})
-          </div>
-          <div class="stat-item">
-            <strong>🚗 Pilot:</strong> ${currentAmbulance.pilot?.name || 'N/A'} (${currentAmbulance.pilot?.mobile || 'N/A'})
-          </div>
-          <div class="stat-item">
-            <strong>🏥 Hospital:</strong> ${currentHospitalId || 'N/A'}
-          </div>
-        `;
-      } catch (error) {
-        document.getElementById('ambulance-quick-stats').innerHTML = 'Error loading stats';
-      }
-    }
-
-    async function loadDashboardHospitalDetails(){
-      if(!currentAmbulance || !currentAmbulance.hospitalId) return;
-      try{
-        const hospital = await api(`/api/hospital/${currentAmbulance.hospitalId}`);
-        document.getElementById('dashboard-hospital-info-content').innerHTML = `
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
-            <div><strong>Hospital ID:</strong> ${hospital.hospitalId}</div>
-            <div><strong>Name:</strong> ${hospital.name || 'N/A'}</div>
-            <div><strong>Contact:</strong> ${hospital.contact || 'N/A'}</div>
-            <div><strong>Location:</strong> ${hospital.address ? `${hospital.address.city}, ${hospital.address.state}` : 'N/A'}</div>
-            <div style="grid-column: 1 / -1;"><strong>Services:</strong> ${hospital.services ? hospital.services.join(', ') : 'N/A'}</div>
-            <div style="grid-column: 1 / -1;"><strong>Specialties:</strong> ${hospital.treatment ? hospital.treatment.join(', ') : 'N/A'}</div>
-          </div>
-        `;
-      }catch(e){
-        document.getElementById('dashboard-hospital-info-content').innerHTML = '<p style="color: red;">Error loading hospital details: ' + e.message + '</p>';
-      }
-    }
-  </script>
-
-  <script>
-    async function verifyHospitalId(){
-      if(!currentAmbulance) return alert('Please login first');
-      const hospitalId = document.getElementById('verify-hospital-id').value.trim();
-      if(!hospitalId){
-        document.getElementById('verify-msg').innerText = 'Please enter Hospital ID';
-        return;
-      }
-      
-      if(hospitalId !== currentAmbulance.hospitalId){
-        document.getElementById('verify-msg').innerText = '❌ Hospital ID does not match. Access denied.';
-        document.getElementById('verify-msg').style.color = 'red';
-        return;
-      }
-      
-      document.getElementById('verify-msg').innerText = '✅ Hospital ID verified successfully!';
-      document.getElementById('verify-msg').style.color = 'green';
-      document.getElementById('hospital-verify-section').style.display = 'none';
-      document.getElementById('password-change-form').style.display = 'block';
-    }
-
-    async function changePasswordAmbulance(){
-      if(!currentAmbulance) return alert('Please login first');
-      const newPass = document.getElementById('new-password').value;
-      if(!newPass || newPass.length < 6){
-        document.getElementById('change-pass-msg').innerText = 'Password must be at least 6 characters.';
-        return;
-      }
-      let username = currentAmbulance.ambulanceId;
-      try{
-        await changePassword('ambulance', username, newPass);
-        document.getElementById('change-pass-msg').innerText = 'Password changed successfully!';
-        document.getElementById('new-password').value = '';
-        // Update forcePasswordChange flag
-        currentAmbulance.forcePasswordChange = false;
-        localStorage.setItem('ambulance', JSON.stringify(currentAmbulance));
-        alert('Password changed! You can now access all features.');
-        showSection('dashboard');
-      }catch(e){
-        document.getElementById('change-pass-msg').innerText = 'Error: ' + e.message;
-      }
-    }
-
-    async function loginAmbulanceHere(){
-      const username = document.getElementById('amb-login-user').value.trim();
-      const password = document.getElementById('amb-login-pass').value;
-      if(!username || !password){
-        document.getElementById('login-msg').innerText = 'Please enter username and password';
-        document.getElementById('login-msg').style.color = 'red';
-        return;
-      }
-      try{
-        const res = await login('ambulance', username, password);
-        localStorage.setItem('role','ambulance');
-        localStorage.setItem('ambulance', JSON.stringify(res.ambulance||{}));
-        document.getElementById('login-msg').innerText = 'Login successful! Loading dashboard...';
-        document.getElementById('login-msg').style.color = 'green';
-        setTimeout(() => location.reload(), 500);
-      }catch(e){
-        document.getElementById('login-msg').innerText = 'Login failed: ' + e.message;
-        document.getElementById('login-msg').style.color = 'red';
-      }
-    }
-
-    function clearEmergencyForm() {
-      document.getElementById('p-name').value = '';
-      document.getElementById('p-age').value = '';
-      document.getElementById('p-gender').value = '';
-      document.getElementById('p-symptoms').value = '';
-      document.getElementById('p-type').value = '';
-      document.getElementById('p-mobile').value = '';
-      document.getElementById('p-addr').value = '';
-      document.getElementById('p-equipment').value = '';
-      document.getElementById('p-reason').value = '';
-    }
-    
-    function showToastNotification(message, type = 'info') {
-      // Create toast notification
-      const toast = document.createElement('div');
-      toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 20px;
-        background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#17a2b8'};
-        color: white;
-        border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 1000;
-        font-weight: 500;
-        animation: slideInRight 0.3s ease-out;
-      `;
-      toast.textContent = message;
-      document.body.appendChild(toast);
-      
-      // Auto remove after 4 seconds
-      setTimeout(() => {
-        toast.style.animation = 'fadeOut 0.3s ease-out';
-        setTimeout(() => toast.remove(), 300);
-      }, 4000);
-    }
-
-    function joinHospitalRoom(hospitalId){
-      if(window.socket && hospitalId){
-        window.socket.emit('joinHospitalRoom', hospitalId);
-      }
-    }
-    
-    async function updateAmbulanceStatus(status){
-      if(!currentAmbulance) return;
-      try{
-        await api(`/api/ambulances/${currentAmbulance.ambulanceId}`, {
-          method: 'PUT',
-          body: JSON.stringify({ status: status })
-        });
-        
-        // Update local ambulance object
-        currentAmbulance.status = status;
-        localStorage.setItem('ambulance', JSON.stringify(currentAmbulance));
-        
-        console.log(`🚑 Ambulance status updated to: ${status}`);
-      }catch(e){
-        console.error('Error updating ambulance status:', e);
-      }
-    }
-
-    async function loadLiveRequests(){
-      if(!currentAmbulance) return;
-      try{
-        // Get all emergency requests submitted by this ambulance
-        const response = await api(`/api/emergency/ambulance/${currentHospitalId}`);
-        const myRequests = response.filter(req => req.ambulanceId === currentAmbulance.ambulanceId);
-        
-        const container = document.getElementById('live-requests-container');
-        
-        if(myRequests.length === 0){
-          container.innerHTML = '<p style="text-align: center; color: #666;">No emergency requests submitted yet.</p>';
-          return;
-        }
-        
-        let html = '<div style="display: grid; gap: 15px;">';
-        
-        myRequests.forEach(req => {
-          const statusColor = getStatusColor(req.status);
-          const timeAgo = getTimeAgo(req.createdAt);
-          
-          html += `
-            <div style="border: 2px solid ${statusColor}; border-radius: 8px; padding: 15px; background: white;">
-              <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 10px;">
-                <h4 style="margin: 0; color: #333;">👤 ${req.patient?.name || 'Unknown'}</h4>
-                <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">${req.status}</span>
-              </div>
-              
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                <div><strong>Age:</strong> ${req.patient?.age || 'N/A'}</div>
-                <div><strong>Gender:</strong> ${req.patient?.gender || 'N/A'}</div>
-                <div><strong>Emergency:</strong> ${req.patient?.emergencyType || 'N/A'}</div>
-                <div><strong>Equipment:</strong> ${req.readyEquipment || 'N/A'}</div>
-              </div>
-              
-              <div style="margin-bottom: 10px;">
-                <strong>Symptoms:</strong> ${req.patient?.symptoms || 'N/A'}<br>
-                <strong>Reason:</strong> ${req.reason || 'N/A'}<br>
-                <strong>Contact:</strong> ${req.patient?.contactMobile || 'N/A'}
-              </div>
-              
-              ${req.status !== 'Pending' ? `
-                <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 10px;">
-                  <strong>🏥 Hospital Response:</strong><br>
-                  ${req.rejectionReason ? `<span style="color: #dc3545;">Reason: ${req.rejectionReason}</span><br>` : ''}
-                  ${req.alternateHospitals?.length > 0 ? `<span style="color: #17a2b8;">Alternate Hospitals: ${req.alternateHospitals.join(', ')}</span><br>` : ''}
-                  ${req.remarks ? `<span style="color: #28a745;">Remarks: ${req.remarks}</span><br>` : ''}
-                </div>
-              ` : ''}
-              
-              <div style="display: flex; justify-content: between; align-items: center; margin-top: 10px;">
-                <small style="color: #666;">📅 ${timeAgo}</small>
-                ${req.status === 'Accepted' && !req.handled ? `
-                  <button onclick="markAsHandled('${req._id}')" style="background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">
-                    ✅ Mark as Handled
-                  </button>
-                ` : req.handled ? '<span style="color: #28a745; font-weight: bold;">✅ Handled</span>' : ''}
-              </div>
+        if (res.success) {
+          document.getElementById('request-status').innerHTML = `
+            <div class="alert alert-success">
+              <h4>✅ Request Sent!</h4>
+              <p>Request ID: ${res.emergency._id}</p>
+              <p>Status: Pending - Waiting for hospital response...</p>
             </div>
           `;
-        });
-        
-        html += '</div>';
-        container.innerHTML = html;
-        
-      }catch(e){
-        document.getElementById('live-requests-container').innerHTML = '<p style="color: #dc3545;">Error loading requests: ' + e.message + '</p>';
-      }
-    }
-    
-    function getStatusColor(status){
-      switch(status){
-        case 'Pending': return '#ffc107';
-        case 'Accepted': return '#28a745';
-        case 'Denied': return '#dc3545';
-        case 'Transferred': return '#17a2b8';
-        default: return '#6c757d';
-      }
-    }
-    
-    function getTimeAgo(dateString){
-      const now = new Date();
-      const date = new Date(dateString);
-      const diffMs = now - date;
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMins / 60);
-      
-      if(diffMins < 1) return 'Just now';
-      if(diffMins < 60) return `${diffMins} min ago`;
-      if(diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-      return date.toLocaleDateString();
-    }
-    
-    async function markAsHandled(emergencyId){
-      try{
-        await api(`/api/emergency/${emergencyId}/handled`, {
-          method: 'PUT',
-          body: JSON.stringify({ 
-            handledComment: 'Case completed by ambulance team'
-          })
-        });
-        
-        // Refresh the requests
-        loadLiveRequests();
-        
-        // Show success message
-        const statusDiv = document.getElementById('emergency-status-updates');
-        const updateDiv = document.createElement('div');
-        updateDiv.style.cssText = 'border: 1px solid #28a745; background: #d4edda; color: #155724; padding: 8px; margin-bottom: 6px; border-radius: 4px;';
-        updateDiv.innerHTML = `
-          <strong>${new Date().toLocaleTimeString()}</strong><br>
-          ✅ Emergency request marked as handled successfully!
-        `;
-        statusDiv.prepend(updateDiv);
-        
-      }catch(e){
-        alert('Error marking as handled: ' + e.message);
+          // Clear form
+          required.forEach(id => document.getElementById(id).value = '');
+          document.getElementById('p-equipment').value = '';
+
+          // Switch to status view after delay
+          setTimeout(() => showSection('emergency-status'), 2000);
+        }
+      } catch (e) {
+        document.getElementById('request-status').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
       }
     }
 
-    async function logoutAmbulance(){
-      if(!currentAmbulance) return;
-      try{
-        // Update ambulance status to Offline
-        await api(`/api/ambulances/${currentAmbulance.ambulanceId}`, {
-          method: 'PUT',
-          body: JSON.stringify({ status: 'Offline' })
-        });
-        
-        // Show logout message
-        alert('🚑 Ambulance ' + currentAmbulance.ambulanceNumber + ' marked as OFFLINE. Logging out...');
-        
-        // Clear localStorage
-        localStorage.removeItem('role');
-        localStorage.removeItem('ambulance');
-        localStorage.removeItem('jwt');
-        
-        // Redirect to login
-        window.location.href = '/';
-      }catch(e){
-        console.error('Logout error:', e);
-        // Force logout anyway
-        localStorage.clear();
-        window.location.href = '/';
-      }
+    // --- Live Status ---
+    async function loadLiveRequests() {
+      if (!currentAmbulance) return;
+      try {
+        const all = await api(`/api/emergency/ambulance/${currentHospitalId}`);
+        const myRequests = all.filter(r => r.ambulanceId === currentAmbulance.ambulanceId);
+
+        const container = document.getElementById('live-requests-container');
+        if (myRequests.length === 0) {
+          container.innerHTML = '<div class="text-center text-muted p-4">No requests found</div>';
+          return;
+        }
+
+        container.innerHTML = myRequests.map(r => `
+          <div class="card p-3" style="border-left: 4px solid ${getStatusColor(r.status)}">
+            <div class="flex justify-between items-start mb-2">
+              <h4 class="mb-0">${r.patient?.name} (${r.patient?.age}Y)</h4>
+              <span class="badge" style="padding: 0.25rem 0.5rem; border-radius: 4px; background: ${getStatusBg(r.status)}; color: ${getStatusColor(r.status)}">${r.status}</span>
+            </div>
+            <div class="text-sm mb-2">
+              <strong>Type:</strong> ${r.patient?.emergencyType}<br>
+              <strong>Symptoms:</strong> ${r.patient?.symptoms}
+            </div>
+            ${r.status !== 'Pending' ? `
+              <div class="bg-light p-2 rounded text-sm mt-2">
+                <strong>Response:</strong> ${r.rejectionReason || r.remarks || 'No remarks'}
+                ${r.alternateHospitals?.length ? `<br><strong>Alternates:</strong> ${r.alternateHospitals.join(', ')}` : ''}
+              </div>
+            ` : ''}
+            <div class="text-xs text-muted mt-2 text-right">
+              ${new Date(r.createdAt).toLocaleString()}
+            </div>
+          </div>
+        `).join('');
+      } catch (e) { console.error(e); }
+    }
+
+    function getStatusColor(s) {
+      if (s === 'Pending') return '#ffc107';
+      if (s === 'Accepted') return '#198754';
+      if (s === 'Denied') return '#dc3545';
+      return '#6c757d';
+    }
+
+    function getStatusBg(s) {
+      if (s === 'Pending') return '#fff3cd';
+      if (s === 'Accepted') return '#d1e7dd';
+      if (s === 'Denied') return '#f8d7da';
+      return '#e9ecef';
+    }
+
+    // --- Real-time ---
+    function joinHospitalRoom(id) {
+      if (window.socket) window.socket.emit('joinHospitalRoom', id);
+    }
+
+    async function updateAmbulanceStatus(status) {
+      if (!currentAmbulance) return;
+      await api(`/api/ambulances/${currentAmbulance.ambulanceId}`, { method: 'PUT', body: JSON.stringify({ status }) });
+      currentAmbulance.status = status;
+      localStorage.setItem('ambulance', JSON.stringify(currentAmbulance));
+    }
+
+    function setupSocketListeners() {
+      // Listen for general updates
+      window.socket.on('emergency:update', (em) => {
+        if (em.ambulanceId === currentAmbulance.ambulanceId) {
+          loadLiveRequests();
+        }
+      });
+
+      // Listen for specific responses (Accept/Reject/Transfer)
+      window.socket.on('emergency:response', (data) => {
+        console.log('Emergency Response:', data);
+
+        const msg = `Update: ${data.status}\n${data.message}\n${data.remarks || data.reason || ''}`;
+
+        // Add to log
+        const log = document.getElementById('emergency-status-updates');
+        if (log) {
+          const entry = document.createElement('div');
+          entry.className = `alert alert-${data.status === 'Accepted' ? 'success' : 'danger'} mb-2`;
+          entry.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${data.status} - ${data.message}`;
+          log.prepend(entry);
+        }
+
+        // Refresh list
+        loadLiveRequests();
+
+        // Show notification
+        notify(msg, data.status === 'Accepted' ? 'success' : 'danger');
+        alert(msg);
+      });
     }
   </script>
 </body>
+
 </html>

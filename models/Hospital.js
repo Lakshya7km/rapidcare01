@@ -18,6 +18,7 @@ const HospitalSchema = new mongoose.Schema(
     name: { type: String, default: '' },
     address: { type: addressSchema, default: {} },
     contact: { type: String, default: '' },
+    googleMapUrl: { type: String, default: '' },
     gallery: { type: [String], default: [] },
     services: { type: [String], default: [] },
     tests: { type: [String], default: [] },
