@@ -16,7 +16,8 @@ const EmergencySchema = new mongoose.Schema(
     ambulanceId: String,
     readyEquipment: String,
     // Include both 'Denied' and 'Rejected' for backward-compat; UI uses 'Rejected'
-    status: { type: String, enum: ['Pending', 'Accepted', 'Denied', 'Rejected', 'Transferred', 'Handled'], default: 'Pending' },
+    status: { type: String, enum: ['Pending', 'Accepted', 'Denied', 'Rejected', 'Transferred', 'Handled', 'Admitted', 'Discharged'], default: 'Pending' },
+    bedId: String,
     reason: String,
     alternateHospitals: [String],
     selectedHospital: String,

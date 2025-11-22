@@ -1,6 +1,6 @@
 // models/Hospital.js
 const mongoose = require('mongoose');
-// simplified: store plaintext password for now (no hashing)
+const bcrypt = require('bcrypt');
 
 const addressSchema = new mongoose.Schema(
   {
@@ -41,8 +41,8 @@ const HospitalSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-HospitalSchema.methods.comparePassword = function(candidate){
-  return candidate === this.password;
+HospitalSchema.methods.comparePassword = async function(candidate){
+  return await bcrypt.compare(candidate, this.password);
 };
 
 module.exports = mongoose.model('Hospital', HospitalSchema);
