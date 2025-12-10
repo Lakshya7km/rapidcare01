@@ -619,7 +619,11 @@
       document.getElementById('stop-scan-btn').style.display = 'inline-block';
 
       if (!qrScanner) {
-        qrScanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: 250 });
+        qrScanner = new Html5QrcodeScanner("qr-reader", {
+          fps: 10,
+          qrbox: 250,
+          facingMode: { exact: "environment" } // Use back camera
+        });
         qrScanner.render(onScanSuccess, onScanFailure);
       }
     }

@@ -11,7 +11,8 @@ module.exports = (io) => {
   // Get emergency by ID (for authenticated portals)
   router.get('/id/:id', async (req, res) => {
     try {
-      const em = await Emergency.findById(req.params.id);
+      // Optimized with .lean()
+      const em = await Emergency.findById(req.params.id).lean();
       if (!em) return res.status(404).json({ message: 'Not found' });
       return res.json(em);
     } catch (err) {
@@ -90,7 +91,10 @@ module.exports = (io) => {
     if (req.user && req.user.role === 'hospital' && req.user.ref !== req.params.hospitalId) {
       return res.status(403).json({ message: 'Forbidden' });
     }
-    const list = await Emergency.find({ hospitalId: req.params.hospitalId }).sort({ createdAt: -1 });
+    // Optimized with .lean()
+    const list = await Emergency.find({ hospitalId: req.params.hospitalId })
+      .sort({ createdAt: -1 })
+      .lean();
     res.json(list);
   });
 
@@ -103,10 +107,11 @@ module.exports = (io) => {
   // Get public emergencies for a specific hospital
   router.get('/public/:hospitalId', async (req, res) => {
     try {
+      // Optimized with .lean()
       const list = await Emergency.find({
         hospitalId: req.params.hospitalId,
         submittedBy: 'public'
-      }).sort({ createdAt: -1 });
+      }).sort({ createdAt: -1 }).lean();
       res.json(list);
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -116,10 +121,11 @@ module.exports = (io) => {
   // Get ambulance emergencies for a specific hospital
   router.get('/ambulance/:hospitalId', async (req, res) => {
     try {
+      // Optimized with .lean()
       const list = await Emergency.find({
         hospitalId: req.params.hospitalId,
         submittedBy: 'ambulance'
-      }).sort({ createdAt: -1 });
+      }).sort({ createdAt: -1 }).lean();
       res.json(list);
     } catch (err) {
       res.status(500).json({ message: err.message });

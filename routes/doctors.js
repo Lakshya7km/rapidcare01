@@ -31,7 +31,7 @@ module.exports = (io) => {
   // Get single doctor by doctorId
   router.get('/doctor/:doctorId', async (req, res) => {
     try {
-      const doctor = await Doctor.findOne({ doctorId: req.params.doctorId });
+      const doctor = await Doctor.findOne({ doctorId: req.params.doctorId }).lean();
       if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
       res.json(doctor);
     } catch (err) {
@@ -44,7 +44,8 @@ module.exports = (io) => {
     if (req.user && req.user.role === 'hospital' && req.user.ref !== req.params.hospitalId) {
       return res.status(403).json({ message: 'Forbidden' });
     }
-    const doctors = await Doctor.find({ hospitalId: req.params.hospitalId });
+    // Optimized with .lean() for faster performance
+    const doctors = await Doctor.find({ hospitalId: req.params.hospitalId }).lean();
     res.json(doctors);
   });
 

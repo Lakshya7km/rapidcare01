@@ -26,7 +26,8 @@ module.exports = (io) => {
       for (const f of arrFilters) {
         if (f.value) query[f.key] = { $in: Array.isArray(f.value) ? f.value : [f.value] };
       }
-      const hospitals = await Hospital.find(query).sort({ name: 1 });
+      // Optimized with .lean() for faster performance
+      const hospitals = await Hospital.find(query).sort({ name: 1 }).lean();
       res.json(hospitals);
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -74,7 +75,8 @@ module.exports = (io) => {
 
   router.get('/:hospitalId', async (req, res) => {
     try {
-      const hospital = await Hospital.findOne({ hospitalId: req.params.hospitalId });
+      // Optimized with .lean()
+      const hospital = await Hospital.findOne({ hospitalId: req.params.hospitalId }).lean();
       if (!hospital) return res.status(404).json({ message: 'Not found' });
       res.json(hospital);
     } catch (err) {

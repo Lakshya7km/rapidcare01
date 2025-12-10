@@ -9,7 +9,8 @@ module.exports = (io) => {
     if (req.user && req.user.role === 'hospital' && req.user.ref !== req.params.hospitalId) {
       return res.status(403).json({ message: 'Forbidden' });
     }
-    const list = await Ambulance.find({ hospitalId: req.params.hospitalId });
+    // Optimized with .lean() for faster performance
+    const list = await Ambulance.find({ hospitalId: req.params.hospitalId }).lean();
     res.json(list);
   });
 
@@ -17,7 +18,14 @@ module.exports = (io) => {
   router.get('/', async (req, res) => {
     const { username } = req.query;
     if (!username) return res.status(400).json({ message: 'username required' });
-    const amb = await Ambulance.findOne({ $or: [{ ambulanceId: username }, { 'emt.emtId': username }, { 'pilot.pilotId': username }] });
+    // Optimized with .lean()
+    const amb = await Ambulance.findOne({
+      $or: [
+        { ambulanceId: username },
+        { 'emt.emtId': username },
+        { 'pilot.pilotId': username }
+      ]
+    }).lean();
     if (!amb) return res.status(404).json({ message: 'not found' });
     res.json(amb);
   });

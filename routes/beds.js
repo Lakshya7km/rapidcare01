@@ -15,7 +15,10 @@ module.exports = (io) => {
       if (req.user && req.user.role === 'hospital' && req.user.ref !== req.params.hospitalId) {
         return res.status(403).json({ message: 'Forbidden' });
       }
-      const beds = await Bed.find({ hospitalId: req.params.hospitalId }).sort({ wardNumber: 1, bedNumber: 1 });
+      // Optimized with .lean() for faster performance (returns plain JS objects)
+      const beds = await Bed.find({ hospitalId: req.params.hospitalId })
+        .sort({ wardNumber: 1, bedNumber: 1 })
+        .lean();
       res.json(beds);
     } catch (err) {
       res.status(500).json({ message: err.message });

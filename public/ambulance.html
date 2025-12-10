@@ -238,6 +238,32 @@
           </div>
         </div>
 
+        <!-- Status Control Card -->
+        <div class="card mb-4 border-warning">
+          <div class="card-header bg-warning text-dark">
+            <h3 class="mb-0">🎛️ Ambulance Status Control</h3>
+          </div>
+          <div class="grid grid-cols-2 gap-md p-3">
+            <div class="form-group mb-0">
+              <label class="form-label font-weight-bold">Current Status</label>
+              <select id="ambulance-status-control" class="form-control" onchange="changeAmbulanceStatus(this.value)">
+                <option value="On Duty">🟢 On Duty</option>
+                <option value="Offline">🔴 Offline</option>
+                <option value="In Transit">🟡 In Transit</option>
+              </select>
+              <small class="text-muted">Change your availability status</small>
+            </div>
+            <div>
+              <label class="form-label font-weight-bold">Live Status</label>
+              <div id="current-status-display" class="p-2 rounded"
+                style="background: #d1f2eb; color: #0f5132; font-size: 1.1rem; font-weight: bold;">
+                🟢 On Duty
+              </div>
+              <small class="text-muted">Updates instantly in reception</small>
+            </div>
+          </div>
+        </div>
+
         <div class="grid grid-cols-2 gap-md">
           <!-- Quick Actions -->
           <div class="card">
@@ -365,6 +391,28 @@
 
         <div id="live-requests-container" class="grid grid-cols-1 gap-md">
           <div class="text-center text-muted p-4">Loading requests...</div>
+        </div>
+
+        <!-- Hospital Contact Card -->
+        <div class="card mt-4 border-primary">
+          <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">🏥 Hospital Contact</h4>
+          </div>
+          <div class="grid grid-cols-2 gap-md p-3">
+            <div>
+              <label class="text-muted text-sm">Hospital Name</label>
+              <div id="hospital-name" class="font-weight-bold">Loading...</div>
+            </div>
+            <div>
+              <label class="text-muted text-sm">Contact Number</label>
+              <div id="hospital-contact" class="font-weight-bold">Loading...</div>
+            </div>
+            <div style="grid-column: 1/-1;">
+              <button onclick="callHospital()" class="btn btn-success btn-block">
+                📞 Call Hospital Now
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="card mt-4 bg-light border-0">
@@ -509,6 +557,9 @@
       setupSocketListeners();
       updateAmbulanceStatus('On Duty');
 
+      // Start heartbeat to keep status updated
+      startHeartbeat();
+
       // Initial Data
       loadDashboardStats();
       loadProfile();
@@ -523,6 +574,48 @@
       }
     }
 
+    // Heartbeat to keep ambulance status active
+    let heartbeatInterval = null;
+
+    function startHeartbeat() {
+      // Send heartbeat every 30 seconds
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+
+      heartbeatInterval = setInterval(() => {
+        if (window.socket && window.socket.connected && currentAmbulance) {
+          window.socket.emit('ambulance:heartbeat', {
+            ambulanceId: currentAmbulance.ambulanceId,
+            hospitalId: currentHospitalId,
+            status: 'On Duty',
+            location: currentAmbulance.location || null
+          });
+        }
+      }, 30000);
+    }
+
+    // Handle page unload/close to update status
+    window.addEventListener('beforeunload', function () {
+      if (currentAmbulance && window.socket) {
+        // Send disconnect signal via socket (synchronous)
+        window.socket.emit('ambulance:disconnect', {
+          ambulanceId: currentAmbulance.ambulanceId,
+          hospitalId: currentHospitalId
+        });
+
+        // Also update DB using sendBeacon (works even after page closes)
+        const blob = new Blob([JSON.stringify({ status: 'Offline' })], { type: 'application/json' });
+        navigator.sendBeacon(
+          `/api/ambulances/${currentAmbulance.ambulanceId}`,
+          blob
+        );
+
+        // Clear heartbeat
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+        }
+      }
+    });
+
     function showSection(name) {
       document.querySelectorAll('.portal-section').forEach(el => el.style.display = 'none');
       document.getElementById('section-' + name).style.display = 'block';
@@ -531,7 +624,41 @@
       // Highlight active nav logic if needed
 
       if (name === 'dashboard') loadDashboardStats();
-      if (name === 'emergency-status') loadLiveRequests();
+      if (name === 'emergency-status') {
+        loadLiveRequests();
+        loadHospitalInfo();
+      }
+    }
+
+    // Load hospital contact information
+    async function loadHospitalInfo() {
+      if (!currentHospitalId) return;
+
+      try {
+        const hospital = await api(`/api/hospital/${currentHospitalId}`);
+        document.getElementById('hospital-name').textContent = hospital.name || currentHospitalId;
+        document.getElementById('hospital-contact').textContent = hospital.contact || 'Not available';
+      } catch (e) {
+        document.getElementById('hospital-name').textContent = currentHospitalId;
+        document.getElementById('hospital-contact').textContent = 'Not available';
+      }
+    }
+
+    // Call hospital function
+    function callHospital() {
+      const contact = document.getElementById('hospital-contact').textContent;
+
+      if (!contact || contact === 'Not available' || contact === 'Loading...') {
+        alert('Hospital contact number not available. Please contact manually.');
+        return;
+      }
+
+      // Remove any non-numeric characters except +
+      const cleanNumber = contact.replace(/[^0-9+]/g, '');
+
+      if (confirm(`Call ${cleanNumber}?`)) {
+        window.location.href = `tel:${cleanNumber}`;
+      }
     }
 
     // --- Dashboard ---
@@ -699,9 +826,81 @@
 
     async function updateAmbulanceStatus(status) {
       if (!currentAmbulance) return;
-      await api(`/api/ambulances/${currentAmbulance.ambulanceId}`, { method: 'PUT', body: JSON.stringify({ status }) });
-      currentAmbulance.status = status;
-      localStorage.setItem('ambulance', JSON.stringify(currentAmbulance));
+
+      try {
+        await api(`/api/ambulances/${currentAmbulance.ambulanceId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ status })
+        });
+
+        currentAmbulance.status = status;
+        localStorage.setItem('ambulance', JSON.stringify(currentAmbulance));
+
+        // Update UI
+        updateStatusDisplay(status);
+
+        // Emit socket event for real-time update in reception
+        if (window.socket) {
+          window.socket.emit('ambulance:statusChange', {
+            ambulanceId: currentAmbulance.ambulanceId,
+            hospitalId: currentHospitalId,
+            status: status,
+            location: status === 'Offline' ? null : currentAmbulance.location
+          });
+        }
+      } catch (e) {
+        console.error('Failed to update status:', e);
+      }
+    }
+
+    // Manual status change from dropdown
+    async function changeAmbulanceStatus(newStatus) {
+      if (!currentAmbulance) return;
+
+      await updateAmbulanceStatus(newStatus);
+
+      // Show toast notification
+      if (window.showToast) {
+        showToast('Status Updated', `Your status is now: ${newStatus}`, 'success');
+      } else {
+        alert(`Status updated to: ${newStatus}`);
+      }
+
+      // If going offline, clear location
+      if (newStatus === 'Offline') {
+        currentAmbulance.location = null;
+        localStorage.setItem('ambulance', JSON.stringify(currentAmbulance));
+      }
+    }
+
+    // Update status display UI
+    function updateStatusDisplay(status) {
+      const display = document.getElementById('current-status-display');
+      const dropdown = document.getElementById('ambulance-status-control');
+      const dashStatus = document.getElementById('dash-status');
+
+      if (dropdown) dropdown.value = status;
+      if (dashStatus) dashStatus.textContent = status;
+
+      if (display) {
+        let icon = '🟢';
+        let bg = '#d1f2eb';
+        let color = '#0f5132';
+
+        if (status === 'Offline') {
+          icon = '🔴';
+          bg = '#f8d7da';
+          color = '#721c24';
+        } else if (status === 'In Transit') {
+          icon = '🟡';
+          bg = '#fff3cd';
+          color = '#856404';
+        }
+
+        display.innerHTML = `${icon} ${status}`;
+        display.style.background = bg;
+        display.style.color = color;
+      }
     }
 
     function setupSocketListeners() {
@@ -716,14 +915,46 @@
       window.socket.on('emergency:response', (data) => {
         console.log('Emergency Response:', data);
 
-        const msg = `Update: ${data.status}\n${data.message}\n${data.remarks || data.reason || ''}`;
+        let msg = '';
+        let alertClass = '';
+
+        if (data.status === 'Accepted') {
+          msg = `✅ REQUEST ACCEPTED\n\n`;
+          msg += `Hospital: ${data.hospital || 'N/A'}\n`;
+          msg += `Message: ${data.message || 'Request accepted'}\n`;
+          if (data.remarks) {
+            msg += `\nInstructions: ${data.remarks}\n`;
+          }
+          msg += `\n➡️ Proceed to hospital for admission procedure`;
+          alertClass = 'success';
+        } else if (data.status === 'Rejected' || data.status === 'Denied') {
+          msg = `❌ REQUEST DENIED\n\n`;
+          msg += `Hospital: ${data.hospital || 'N/A'}\n`;
+          if (data.reason || data.rejectionReason) {
+            msg += `Reason: ${data.reason || data.rejectionReason}\n`;
+          }
+          if (data.alternateHospitals && data.alternateHospitals.length > 0) {
+            msg += `\n📍 Suggested Alternate Hospitals:\n`;
+            data.alternateHospitals.forEach((h, i) => {
+              msg += `  ${i + 1}. ${h}\n`;
+            });
+          }
+          alertClass = 'danger';
+        } else {
+          msg = `Update: ${data.status}\n${data.message || ''}\n${data.remarks || data.reason || ''}`;
+          alertClass = 'info';
+        }
 
         // Add to log
         const log = document.getElementById('emergency-status-updates');
         if (log) {
           const entry = document.createElement('div');
-          entry.className = `alert alert-${data.status === 'Accepted' ? 'success' : 'danger'} mb-2`;
-          entry.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${data.status} - ${data.message}`;
+          entry.className = `alert alert-${alertClass} mb-2`;
+          entry.innerHTML = `
+            <strong>${new Date().toLocaleTimeString()}</strong>: ${data.status}
+            ${data.reason || data.remarks || data.message || ''}
+            ${data.alternateHospitals && data.alternateHospitals.length > 0 ? `<br><small>Alternates: ${data.alternateHospitals.join(', ')}</small>` : ''}
+          `;
           log.prepend(entry);
         }
 
@@ -731,7 +962,9 @@
         loadLiveRequests();
 
         // Show notification
-        notify(msg, data.status === 'Accepted' ? 'success' : 'danger');
+        if (window.notify) {
+          notify(msg, alertClass);
+        }
         alert(msg);
       });
     }

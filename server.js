@@ -138,6 +138,42 @@ io.on('connection', (socket) => {
     console.log(`📢 Notification: ${payload.type} - ${payload.message}`);
   });
 
+  // Ambulance heartbeat - keeps status as "On Duty"
+  socket.on('ambulance:heartbeat', (payload) => {
+    // payload: { ambulanceId, hospitalId, status, location }
+    io.to(`hospital_${payload.hospitalId}`).emit('ambulance:statusUpdate', {
+      ambulanceId: payload.ambulanceId,
+      status: payload.status || 'On Duty',
+      location: payload.location || null,
+      lastSeen: new Date()
+    });
+    console.log(`💓 Ambulance heartbeat: ${payload.ambulanceId} - ${payload.status}`);
+  });
+
+  // Ambulance status change (manual)
+  socket.on('ambulance:statusChange', (payload) => {
+    // payload: { ambulanceId, hospitalId, status, location }
+    io.to(`hospital_${payload.hospitalId}`).emit('ambulance:statusUpdate', {
+      ambulanceId: payload.ambulanceId,
+      status: payload.status,
+      location: payload.location,
+      lastSeen: new Date()
+    });
+    console.log(`🎛️ Ambulance status changed: ${payload.ambulanceId} → ${payload.status}`);
+  });
+
+  // Ambulance disconnect - updates status to "Offline"
+  socket.on('ambulance:disconnect', (payload) => {
+    // payload: { ambulanceId, hospitalId }
+    io.to(`hospital_${payload.hospitalId}`).emit('ambulance:statusUpdate', {
+      ambulanceId: payload.ambulanceId,
+      status: 'Offline',
+      location: null,
+      lastSeen: new Date()
+    });
+    console.log(`📴 Ambulance disconnected: ${payload.ambulanceId}`);
+  });
+
   socket.on('disconnect', () => {
     console.log('🔌 Socket disconnected:', socket.id);
   });
