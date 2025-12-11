@@ -72,6 +72,12 @@ io.on('connection', (socket) => {
     console.log(`📡 Socket ${socket.id} joined hospital room: ${hospitalId}`);
   });
 
+  // Join ambulance-specific room
+  socket.on('joinAmbulanceRoom', (ambulanceId) => {
+    socket.join(`ambulance_${ambulanceId}`);
+    console.log(`📡 Socket ${socket.id} joined ambulance room: ${ambulanceId}`);
+  });
+
   // Ambulance location tracking
   socket.on('ambulanceLocation', (payload) => {
     // payload: { ambulanceId, hospitalId, lat, lng }
